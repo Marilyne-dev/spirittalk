@@ -522,7 +522,13 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
           <div className="max-w-7xl mx-auto px-6 md:px-12 space-y-16">
             
             {/* Header */}
-            <div className="text-center max-w-2xl mx-auto space-y-4">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 0.6 }}
+              className="text-center max-w-2xl mx-auto space-y-4"
+            >
               <span className="px-3 py-1 bg-emerald-medium/10 text-emerald-deep rounded-full text-[10px] font-bold uppercase tracking-widest">
                 Fonctionnalités Clés
               </span>
@@ -532,13 +538,20 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
               <p className="text-sm text-slate-500 leading-relaxed">
                 SpiritTalk unifie les outils théologiques les plus avancés au sein d'une interface épurée, respectant l'intégrité de chaque tradition spirituelle.
               </p>
-            </div>
+            </motion.div>
 
             {/* Features Bento-Like Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
               
               {/* Feature 1: Espace Chrétien */}
-              <div className="p-6 bg-[#FDFBF7] rounded-3xl border border-cream-darker hover:shadow-lg transition-all hover:-translate-y-1 space-y-4">
+              <motion.div
+                initial={{ opacity: 0, y: 40 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-100px" }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+                whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 30px -10px rgba(16, 185, 129, 0.1)" }}
+                className="p-6 bg-[#FDFBF7] rounded-3xl border border-cream-darker hover:border-emerald-medium/20 transition-all space-y-4 cursor-pointer"
+              >
                 <div className="w-12 h-12 rounded-2xl bg-emerald-medium/10 flex items-center justify-center text-emerald-deep">
                   <BookOpen className="w-6 h-6 text-emerald-medium" />
                 </div>
@@ -550,10 +563,17 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
                   <span>Sainte Bible LSG</span>
                   <Check className="w-3.5 h-3.5" />
                 </div>
-              </div>
+              </motion.div>
 
               {/* Feature 2: Espace Musulman */}
-              <div className="p-6 bg-[#FDFBF7] rounded-3xl border border-cream-darker hover:shadow-lg transition-all hover:-translate-y-1 space-y-4">
+              <motion.div
+                initial={{ opacity: 0, y: 40 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-100px" }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 30px -10px rgba(220, 170, 70, 0.15)" }}
+                className="p-6 bg-[#FDFBF7] rounded-3xl border border-cream-darker hover:border-gold-deep/20 transition-all space-y-4 cursor-pointer"
+              >
                 <div className="w-12 h-12 rounded-2xl bg-gold-bright/20 flex items-center justify-center text-gold-deep">
                   <Moon className="w-6 h-6 text-gold-deep" />
                 </div>
@@ -565,10 +585,17 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
                   <span>Traduction Hamidullah</span>
                   <Check className="w-3.5 h-3.5" />
                 </div>
-              </div>
+              </motion.div>
 
               {/* Feature 3: Guidance IA Sagesse Divine */}
-              <div className="p-6 bg-[#FDFBF7] rounded-3xl border border-cream-darker hover:shadow-lg transition-all hover:-translate-y-1 space-y-4">
+              <motion.div
+                initial={{ opacity: 0, y: 40 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-100px" }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 30px -10px rgba(99, 102, 241, 0.1)" }}
+                className="p-6 bg-[#FDFBF7] rounded-3xl border border-cream-darker hover:border-indigo-500/20 transition-all space-y-4 cursor-pointer"
+              >
                 <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-600">
                   <Sparkles className="w-6 h-6 text-indigo-500" />
                 </div>
@@ -580,10 +607,17 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
                   <span>Modèle Gemini Sécurisé</span>
                   <Check className="w-3.5 h-3.5" />
                 </div>
-              </div>
+              </motion.div>
 
               {/* Feature 4: Bibliothèque & Recherche par Référence */}
-              <div className="p-6 bg-[#FDFBF7] rounded-3xl border border-cream-darker hover:shadow-lg transition-all hover:-translate-y-1 space-y-4">
+              <motion.div
+                initial={{ opacity: 0, y: 40 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-100px" }}
+                transition={{ duration: 0.5, delay: 0.4 }}
+                whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 30px -10px rgba(217, 119, 6, 0.1)" }}
+                className="p-6 bg-[#FDFBF7] rounded-3xl border border-cream-darker hover:border-amber-500/20 transition-all space-y-4 cursor-pointer"
+              >
                 <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-600">
                   <BookOpenCheck className="w-6 h-6 text-amber-600" />
                 </div>
@@ -595,12 +629,18 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
                   <span>Slicing de précision</span>
                   <Check className="w-3.5 h-3.5" />
                 </div>
-              </div>
+              </motion.div>
 
             </div>
 
             {/* Additional Features List: Quizzes & community */}
-            <div className="bg-[#F2E8CF]/15 rounded-3xl border border-cream-darker p-8 md:p-12 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true, margin: "-80px" }}
+              transition={{ duration: 0.7 }}
+              className="bg-[#F2E8CF]/15 rounded-3xl border border-cream-darker p-8 md:p-12 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center"
+            >
               <div className="space-y-6">
                 <h3 className="font-serif text-2xl font-bold text-emerald-deep leading-tight">
                   Forum d'Échange & Défis Théologiques Interactifs
@@ -624,21 +664,29 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
                 </ul>
               </div>
 
-              <div className="relative">
-                <img
+              <div className="relative group overflow-hidden rounded-2xl">
+                <motion.img
+                  whileHover={{ scale: 1.05 }}
+                  transition={{ duration: 0.5 }}
                   className="rounded-2xl border border-cream-darker shadow-lg w-full h-auto object-cover max-h-[300px]"
                   src="https://images.unsplash.com/photo-1518495973542-4542c06a5843?q=80&w=800"
                   alt="Interactive SpiritTalk Features"
                 />
-                <div className="absolute -bottom-4 -left-4 bg-white p-4 rounded-xl border border-cream-darker shadow-md flex items-center gap-3">
+                <motion.div
+                  initial={{ x: -20, opacity: 0 }}
+                  whileInView={{ x: 0, opacity: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: 0.3, duration: 0.5 }}
+                  className="absolute -bottom-2 -left-2 bg-white p-4 rounded-xl border border-cream-darker shadow-md flex items-center gap-3 z-10"
+                >
                   <Flame className="w-6 h-6 text-orange-500 animate-pulse" />
                   <div>
                     <h4 className="font-sans text-xs font-bold text-emerald-deep">Série d'Assiduité</h4>
                     <p className="text-[9px] text-slate-400">Gardez la flamme spirituelle active</p>
                   </div>
-                </div>
+                </motion.div>
               </div>
-            </div>
+            </motion.div>
 
           </div>
         </section>
@@ -648,7 +696,13 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
           <div className="max-w-7xl mx-auto px-6 md:px-12 space-y-16">
             
             {/* Header */}
-            <div className="text-center max-w-2xl mx-auto space-y-4">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+              className="text-center max-w-2xl mx-auto space-y-4"
+            >
               <span className="px-3 py-1 bg-gold-bright/30 text-gold-deep rounded-full text-[10px] font-bold uppercase tracking-widest">
                 Pourquoi SpiritTalk ?
               </span>
@@ -658,42 +712,69 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
               <p className="text-sm text-slate-500 leading-relaxed">
                 À une époque où l'incompréhension domine, SpiritTalk offre un sanctuaire pacifique unique au monde, favorisant l'apprentissage mutuel sans dogmatisme.
               </p>
-            </div>
+            </motion.div>
 
             {/* Editorial Columns */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               
               {/* Point 1: Two Faiths, One Respect */}
-              <div className="space-y-4">
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+                whileHover={{ y: -3 }}
+                className="space-y-4 p-4 rounded-2xl hover:bg-white hover:shadow-sm transition-all duration-300"
+              >
                 <div className="w-10 h-10 rounded-full bg-emerald-medium/10 text-emerald-deep flex items-center justify-center font-serif text-lg font-bold">1</div>
                 <h3 className="font-serif text-xl font-bold text-emerald-deep">Double espace d'apprentissage</h3>
                 <p className="text-xs text-slate-600 leading-relaxed">
                   Nous ne mélangeons pas les Écritures mais nous les présentons côte à côte avec le même respect et la même rigueur théologique. Les utilisateurs choisissent leur sensibilité préférée ou profitent d'un espace mixte de dialogue.
                 </p>
-              </div>
+              </motion.div>
 
               {/* Point 2: Zero Ad, Offline First & Privacy */}
-              <div className="space-y-4">
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                whileHover={{ y: -3 }}
+                className="space-y-4 p-4 rounded-2xl hover:bg-white hover:shadow-sm transition-all duration-300"
+              >
                 <div className="w-10 h-10 rounded-full bg-gold-bright/30 text-gold-deep flex items-center justify-center font-serif text-lg font-bold">2</div>
                 <h3 className="font-serif text-xl font-bold text-[#856529]">Confidentialité & Recueillement</h3>
                 <p className="text-xs text-slate-600 leading-relaxed">
                   Aucune publicité, aucun algorithme d'attention agressif. SpiritTalk est un sanctuaire de silence et de concentration pour lire, méditer, et enregistrer vos notes personnelles dans un carnet spirituel intime.
                 </p>
-              </div>
+              </motion.div>
 
               {/* Point 3: Live API & Intelligent Search */}
-              <div className="space-y-4">
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                whileHover={{ y: -3 }}
+                className="space-y-4 p-4 rounded-2xl hover:bg-white hover:shadow-sm transition-all duration-300"
+              >
                 <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-serif text-lg font-bold">3</div>
                 <h3 className="font-serif text-xl font-bold text-indigo-950">Accès direct aux API authentiques</h3>
                 <p className="text-xs text-slate-600 leading-relaxed">
                   Contrairement aux applications utilisant des résumés, notre lecteur de chapitre et de sourates est connecté en direct aux serveurs sacrés pour charger le texte littéral, verset par verset, dans des traductions validées.
                 </p>
-              </div>
+              </motion.div>
 
             </div>
 
             {/* Quote of Rumi on Tolerance */}
-            <div className="p-8 md:p-12 bg-white rounded-3xl border border-cream-darker text-center max-w-4xl mx-auto space-y-4 shadow-sm relative overflow-hidden">
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.7 }}
+              className="p-8 md:p-12 bg-white rounded-3xl border border-cream-darker text-center max-w-4xl mx-auto space-y-4 shadow-sm relative overflow-hidden"
+            >
               <div className="absolute top-0 left-0 w-16 h-16 bg-gold-bright/10 rounded-full blur-xl"></div>
               <blockquote className="font-serif text-lg md:text-xl text-slate-700 italic leading-relaxed">
                 "La vérité est un miroir tombé des mains de Dieu et qui s'est brisé. Chacun en ramasse un morceau et croit détenir toute la vérité. SpiritTalk cherche à assembler ces morceaux pour contempler la beauté de la lumière commune."
@@ -701,7 +782,7 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
               <cite className="block text-xs uppercase tracking-widest text-slate-400 font-bold not-italic">
                 — Inspiré de Jalâl ad-Dîn Rûmî
               </cite>
-            </div>
+            </motion.div>
 
           </div>
         </section>
@@ -711,7 +792,13 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
           <div className="max-w-3xl mx-auto px-6 space-y-12">
             
             {/* Header */}
-            <div className="text-center space-y-4">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+              className="text-center space-y-4"
+            >
               <span className="px-3 py-1 bg-emerald-medium/10 text-emerald-deep rounded-full text-[10px] font-bold uppercase tracking-widest">
                 Support & Prières
               </span>
@@ -721,10 +808,16 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
               <p className="text-xs text-slate-500 leading-relaxed max-w-xl mx-auto">
                 Vous avez une question théologique, besoin d'aide pour utiliser l'application, ou souhaitez soumettre une intention de prière confidentielle ? Écrivez-nous librement.
               </p>
-            </div>
+            </motion.div>
 
             {/* Beautiful Contact Form */}
-            <div className="bg-[#FDFBF7] rounded-3xl border border-cream-darker p-8 shadow-sm">
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+              className="bg-[#FDFBF7] rounded-3xl border border-cream-darker p-8 shadow-sm"
+            >
               <form onSubmit={handleContactSubmit} className="space-y-4">
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -783,20 +876,23 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
                   />
                 </div>
 
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
                   type="submit"
                   disabled={isSubmittingContact}
                   className="w-full py-4 bg-emerald-deep hover:bg-emerald-medium text-white font-sans text-xs uppercase tracking-widest font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
                 >
                   <span>{isSubmittingContact ? "Envoi céleste en cours..." : "Envoyer mon message"}</span>
                   <Send className="w-3.5 h-3.5" />
-                </button>
+                </motion.button>
 
               </form>
-            </div>
+            </motion.div>
 
           </div>
         </section>
+
 
       </div>
 

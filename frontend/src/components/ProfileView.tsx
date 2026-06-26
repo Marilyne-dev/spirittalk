@@ -15,7 +15,7 @@ interface ProfileViewProps {
   onDeleteNote: (id: string) => void;
   onNavigateToChatWithQuery: (initialPrompt: string) => void;
   hasCheckedInToday: boolean;
-  onUpdateProfile: (updates: { name: string; email: string; religion: Religion; avatar: string }) => void;
+  onUpdateProfile: (updates: { name: string; email: string; religion: Religion; avatar: string; profession?: string; password?: string }) => void;
   onLogout: () => void;
 }
 
@@ -57,6 +57,8 @@ export default function ProfileView({
   const [editEmail, setEditEmail] = useState(user?.email || "");
   const [editReligion, setEditReligion] = useState<Religion>(user?.religion || "Mixte");
   const [editAvatar, setEditAvatar] = useState(user?.avatar || AVATAR_OPTIONS[0]);
+  const [editProfession, setEditProfession] = useState(user?.profession || "");
+  const [editPassword, setEditPassword] = useState("");
 
   // Determine Level based on XP
   const getLevelInfo = (score: number) => {
@@ -97,8 +99,11 @@ export default function ProfileView({
       name: editName,
       email: editEmail,
       religion: editReligion,
-      avatar: editAvatar
+      avatar: editAvatar,
+      profession: editProfession,
+      password: editPassword || undefined
     });
+    setEditPassword("");
     setIsEditing(false);
   };
 
@@ -154,6 +159,11 @@ export default function ProfileView({
               <p className="font-mono text-[10px] text-slate-400 uppercase tracking-widest font-bold">
                 @{user?.username || "seeker"}
               </p>
+              {user?.profession && (
+                <p className="text-xs text-slate-500 dark:text-cream-base/65 font-medium italic">
+                  {user?.profession}
+                </p>
+              )}
               <div className="flex items-center justify-center gap-1.5 mt-1 bg-cream-darker dark:bg-charcoal-light/40 px-3 py-1 rounded-full border border-cream-darker/60">
                 {user?.religion === 'Chrétienne' ? (
                   <BookOpen className="w-3.5 h-3.5 text-emerald-medium dark:text-emerald-fixed" />
@@ -267,6 +277,34 @@ export default function ProfileView({
                     required
                     value={editEmail}
                     onChange={(e) => setEditEmail(e.target.value)}
+                    className="w-full bg-white dark:bg-charcoal-dark border border-cream-darker dark:border-charcoal-light/15 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-emerald-medium text-slate-800 dark:text-cream-base"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold tracking-wider text-emerald-light dark:text-emerald-fixed block">
+                    Profession / Fonction
+                  </label>
+                  <input
+                    type="text"
+                    value={editProfession}
+                    onChange={(e) => setEditProfession(e.target.value)}
+                    placeholder="ex: Enseignant, Étudiant, Développeur..."
+                    className="w-full bg-white dark:bg-charcoal-dark border border-cream-darker dark:border-charcoal-light/15 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-emerald-medium text-slate-800 dark:text-cream-base"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold tracking-wider text-emerald-light dark:text-emerald-fixed block">
+                    Nouveau Mot de Passe (Optionnel)
+                  </label>
+                  <input
+                    type="password"
+                    value={editPassword}
+                    onChange={(e) => setEditPassword(e.target.value)}
+                    placeholder="Laisser vide pour ne pas modifier"
                     className="w-full bg-white dark:bg-charcoal-dark border border-cream-darker dark:border-charcoal-light/15 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-emerald-medium text-slate-800 dark:text-cream-base"
                   />
                 </div>

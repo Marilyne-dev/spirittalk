@@ -73,4 +73,63 @@ export interface User {
   avatar?: string;
   level: string;
   xp_points: number;
+  profession?: string;
+  password?: string;
+}
+
+export interface PostComment {
+  id: string;
+  authorName: string;
+  authorAvatar: string;
+  content: string;
+  time: string;
+}
+
+export interface CommunityPost {
+  id: string;
+  name: string;
+  username: string;
+  avatar: string;
+  content: string;
+  religion: Religion;
+  likes: number;
+  likedByMe?: boolean;
+  time: string;
+  images?: string[];
+  videoUrl?: string;
+  comments: PostComment[];
+  verse_reference?: string;
+  verse_text?: string;
+}
+
+export interface DirectMessage {
+  id: string;
+  senderId: string;
+  recipientId: string;
+  text?: string;
+  timestamp: string;
+  images?: string[];
+  audioUrl?: string;
+  audioDuration?: string;
+}
+
+export interface Friend {
+  id: string;
+  name: string;
+  username: string;
+  avatar: string;
+  religion: Religion;
+  profession?: string;
+  status: 'accepted' | 'pending_sent' | 'pending_received';
+  isOnline?: boolean;
+  isTyping?: boolean;
+}
+
+export interface SpiritNotification {
+  id: string;
+  title: string;
+  description: string;
+  time: string;
+  isRead: boolean;
+  type: 'friend_request' | 'friend_accept' | 'comment' | 'message';
 }

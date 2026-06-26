@@ -13,6 +13,7 @@ interface HomeViewProps {
   onSelectInspiration: (card: InspirationCard) => void;
   onBookmark: (text: string, reference: string, source: string) => void;
   onAddXP: (amount: number) => void;
+  onNavigateToChatWithQuery?: (prompt: string) => void;
 }
 
 interface CommunityPost {
@@ -73,7 +74,8 @@ export default function HomeView({
   onOpenQuiz,
   onSelectInspiration,
   onBookmark,
-  onAddXP
+  onAddXP,
+  onNavigateToChatWithQuery
 }: HomeViewProps) {
   const [verseIdx, setVerseIdx] = useState(0);
   const [plans, setPlans] = useState<ReadingPlan[]>(READING_PLANS);
@@ -625,7 +627,7 @@ export default function HomeView({
                   </button>
 
                   <button
-                    onClick={() => onNavigateToChatWithQuery(`La personne Amina ou Samuel a dit ceci sur SpiritTalk : "${post.content}". Analyse cela et dis-moi quoi lui répondre de manière fraternelle et spirituelle.`)}
+                    onClick={() => onNavigateToChatWithQuery?.(`La personne Amina ou Samuel a dit ceci sur SpiritTalk : "${post.content}". Analyse cela et dis-moi quoi lui répondre de manière fraternelle et spirituelle.`)}
                     className="text-[10px] font-bold text-emerald-medium dark:text-emerald-fixed hover:underline flex items-center gap-1"
                   >
                     <span>Consulter l'IA sur ce post</span>
