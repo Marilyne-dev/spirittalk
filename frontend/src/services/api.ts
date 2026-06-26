@@ -46,6 +46,8 @@ export const apiService = {
         name: 'Seeker',
         username: 'seeker',
         email: email,
+        religion: 'Mixte',
+        avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200',
         level: 'Explorateur Sage',
         xp_points: 1200
       };
@@ -55,12 +57,12 @@ export const apiService = {
     }
   },
 
-  async register(name: string, username: string, email: string, password: string) {
+  async register(name: string, username: string, email: string, password: string, religion: 'Chrétienne' | 'Musulmane' | 'Mixte') {
     try {
       const response = await fetch(`${API_BASE_URL}/register`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ name, username, email, password }),
+        body: JSON.stringify({ name, username, email, password, religion }),
       });
       if (!response.ok) throw new Error('Erreur lors de l\'inscription');
       const data = await response.json();
@@ -76,12 +78,39 @@ export const apiService = {
         name,
         username,
         email,
+        religion,
+        avatar: religion === 'Chrétienne' 
+          ? 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=200' 
+          : religion === 'Musulmane' 
+          ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200'
+          : 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200',
         level: 'Explorateur',
         xp_points: 0
       };
       localStorage.setItem('spirittalk_token', 'mock_token_123456');
       localStorage.setItem('spirittalk_user', JSON.stringify(mockUser));
       return { token: 'mock_token_123456', user: mockUser };
+    }
+  },
+
+  async updateProfile(updates: { name?: string; email?: string; religion?: 'Chrétienne' | 'Musulmane' | 'Mixte'; avatar?: string }) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/user/update`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(updates),
+      });
+      if (!response.ok) throw new Error('Erreur lors de la mise à jour du profil');
+      const data = await response.json();
+      localStorage.setItem('spirittalk_user', JSON.stringify(data.user || data));
+      return data;
+    } catch (error) {
+      console.warn("Laravel Backend Profile Update failed, using local simulation", error);
+      const savedUserStr = localStorage.getItem('spirittalk_user');
+      const current = savedUserStr ? JSON.parse(savedUserStr) : { id: 1, name: 'Seeker', email: 'seeker@example.com', religion: 'Mixte', xp_points: 1200, level: 'Explorateur Sage' };
+      const updatedUser = { ...current, ...updates };
+      localStorage.setItem('spirittalk_user', JSON.stringify(updatedUser));
+      return { user: updatedUser };
     }
   },
 

@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Home, Sparkles, Search, User, Award, Moon, Sun, Bell, MessageSquare } from 'lucide-react';
-import { ChatMessage, Bookmark, Note, InspirationCard } from './types';
+import { ChatMessage, Bookmark, Note, InspirationCard, Religion } from './types';
 import HomeView from './components/HomeView';
 import ChatView from './components/ChatView';
 import SearchView from './components/SearchView';
 import ProfileView from './components/ProfileView';
 import QuizModal from './components/QuizModal';
 import InspirationModal from './components/InspirationModal';
+import AuthView from './components/AuthView';
+import { apiService } from './services/api';
+import { generateLocalAiResponse } from './services/localAiService';
 
 const PRE_SEEDED_CHAT: ChatMessage[] = [
   {
@@ -74,6 +77,11 @@ const PRE_SEEDED_BOOKMARKS: Bookmark[] = [
 ];
 
 export default function App() {
+  const [user, setUser] = useState<any>(() => {
+    const saved = localStorage.getItem('spirittalk_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
   const [currentTab, setCurrentTab] = useState<'home' | 'chat' | 'search' | 'profile'>('home');
   const [darkMode, setDarkMode] = useState<boolean>(false);
   
@@ -206,17 +214,41 @@ export default function App() {
     setIsGenerating(true);
 
     try {
-      const response = await fetch('/api/gemini/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: chatMessages,
-          userMessage: text
-        })
-      });
+      let data: any = null;
+      let isSuccess = false;
 
-      const data = await response.json();
-      if (response.ok && data.text) {
+      try {
+        const response = await fetch('/api/gemini/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: chatMessages,
+            userMessage: text
+          })
+        });
+
+        const contentType = response.headers.get("content-type");
+        if (response.ok && contentType && contentType.includes("application/json")) {
+          data = await response.json();
+          if (data && data.text) {
+            isSuccess = true;
+          }
+        }
+      } catch (e) {
+        console.warn("Direct server chat endpoint failed, falling back to local AI engine", e);
+      }
+
+      // If server failed, generate client fallback
+      if (!isSuccess) {
+        const localRes = await generateLocalAiResponse(text, user?.religion);
+        data = {
+          text: localRes.text,
+          scriptureQuote: localRes.scriptureQuote
+        };
+        isSuccess = true;
+      }
+
+      if (isSuccess && data) {
         const aiMsg: ChatMessage = {
           id: `msg_ai_${Date.now()}`,
           role: 'model',
@@ -227,7 +259,7 @@ export default function App() {
         setChatMessages(prev => [...prev, aiMsg]);
         handleAddXP(15); // Gain some XP for interacting/learning
       } else {
-        throw new Error(data.error || "Failed to fetch response");
+        throw new Error("Impossible de générer une réponse.");
       }
     } catch (err: any) {
       console.error(err);
@@ -252,6 +284,26 @@ export default function App() {
     alert("Vos notifications spirituelles sont à jour !");
   };
 
+  const handleUpdateProfile = async (updates: { name: string; email: string; religion: Religion; avatar: string }) => {
+    const result = await apiService.updateProfile(updates);
+    if (result && result.user) {
+      setUser(result.user);
+    } else {
+      setUser((prev: any) => ({ ...prev, ...updates }));
+    }
+    alert("Profil spirituel mis à jour avec succès ! Vos préférences ont été enregistrées.");
+  };
+
+  const handleLogout = async () => {
+    await apiService.logout();
+    setUser(null);
+  };
+
+  // Render Authentication screen if not logged in
+  if (!user) {
+    return <AuthView onAuthSuccess={(authenticatedUser) => setUser(authenticatedUser)} />;
+  }
+
   return (
     <div className="min-h-screen bg-cream-base dark:bg-charcoal-dark text-slate-800 dark:text-cream-base flex flex-col md:flex-row transition-colors duration-300">
       
@@ -270,7 +322,7 @@ export default function App() {
                 ? "bg-emerald-medium text-white dark:bg-emerald-fixed dark:text-charcoal-dark shadow-md scale-110"
                 : "text-slate-400 hover:text-emerald-medium dark:hover:text-gold-bright hover:bg-cream-darker dark:hover:bg-charcoal-light/20"
             }`}
-            title="Accueil"
+            title="Accueil / Communauté"
           >
             <Home className="w-5 h-5" />
           </button>
@@ -349,6 +401,7 @@ export default function App() {
               className="md:hidden p-2 text-slate-500 dark:text-cream-base/60 hover:bg-cream-darker dark:hover:bg-charcoal-light/25 rounded-lg transition-colors"
               title="Thème"
             >
+            
               {darkMode ? <Sun className="w-4 h-4 text-gold-bright" /> : <Moon className="w-4 h-4" />}
             </button>
 
@@ -367,6 +420,7 @@ export default function App() {
         <main className="flex-grow p-4 md:p-8 max-w-[1000px] mx-auto w-full">
           {currentTab === 'home' && (
             <HomeView
+              user={user}
               xp={xp}
               streak={streak}
               onOpenQuiz={() => setIsQuizOpen(true)}
@@ -394,6 +448,7 @@ export default function App() {
 
           {currentTab === 'profile' && (
             <ProfileView
+              user={user}
               xp={xp}
               streak={streak}
               bookmarks={bookmarks}
@@ -404,6 +459,8 @@ export default function App() {
               onDeleteNote={handleDeleteNote}
               onNavigateToChatWithQuery={handleNavigateToChatWithQuery}
               hasCheckedInToday={hasCheckedInToday}
+              onUpdateProfile={handleUpdateProfile}
+              onLogout={handleLogout}
             />
           )}
         </main>
@@ -420,7 +477,7 @@ export default function App() {
           }`}
         >
           <Home className="w-5 h-5 mb-1" />
-          <span className="text-[10px] tracking-wide font-medium">Home</span>
+          <span className="text-[10px] tracking-wide font-medium">Accueil</span>
         </button>
 
         <button
@@ -432,7 +489,7 @@ export default function App() {
           }`}
         >
           <Sparkles className="w-5 h-5 mb-1" />
-          <span className="text-[10px] tracking-wide font-medium">Chat</span>
+          <span className="text-[10px] tracking-wide font-medium">Chat IA</span>
         </button>
 
         <button
@@ -444,7 +501,7 @@ export default function App() {
           }`}
         >
           <Search className="w-5 h-5 mb-1" />
-          <span className="text-[10px] tracking-wide font-medium">Search</span>
+          <span className="text-[10px] tracking-wide font-medium">Étude</span>
         </button>
 
         <button
@@ -456,7 +513,7 @@ export default function App() {
           }`}
         >
           <User className="w-5 h-5 mb-1" />
-          <span className="text-[10px] tracking-wide font-medium">Profile</span>
+          <span className="text-[10px] tracking-wide font-medium">Profil</span>
         </button>
       </nav>
 

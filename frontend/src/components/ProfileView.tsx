@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Award, Flame, Bookmark, PenSquare, Trash2, Copy, Check, Calendar, Plus, MessageSquare, BookOpen, Clock, X } from 'lucide-react';
-import { Bookmark as BookmarkType, Note } from '../types';
+import { Award, Flame, Bookmark, PenSquare, Trash2, Copy, Check, Calendar, Plus, MessageSquare, BookOpen, Clock, X, Settings, LogOut, CheckCircle, Moon, Sparkles } from 'lucide-react';
+import { Bookmark as BookmarkType, Note, Religion } from '../types';
 
 interface ProfileViewProps {
+  user: any;
   xp: number;
   streak: number;
   bookmarks: BookmarkType[];
@@ -14,9 +15,21 @@ interface ProfileViewProps {
   onDeleteNote: (id: string) => void;
   onNavigateToChatWithQuery: (initialPrompt: string) => void;
   hasCheckedInToday: boolean;
+  onUpdateProfile: (updates: { name: string; email: string; religion: Religion; avatar: string }) => void;
+  onLogout: () => void;
 }
 
+const AVATAR_OPTIONS = [
+  'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200',
+  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200',
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200',
+  'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=200',
+  'https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=200',
+  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200'
+];
+
 export default function ProfileView({
+  user,
   xp,
   streak,
   bookmarks,
@@ -26,7 +39,9 @@ export default function ProfileView({
   onAddNote,
   onDeleteNote,
   onNavigateToChatWithQuery,
-  hasCheckedInToday
+  hasCheckedInToday,
+  onUpdateProfile,
+  onLogout
 }: ProfileViewProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   
@@ -35,6 +50,23 @@ export default function ProfileView({
   const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
   const [noteCategory, setNoteCategory] = useState<'Silence' | 'Gratitude' | 'Prière' | 'Méditation' | 'Autre'>('Silence');
+
+  // Profile Edit states
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(user?.name || "");
+  const [editEmail, setEditEmail] = useState(user?.email || "");
+  const [editReligion, setEditReligion] = useState<Religion>(user?.religion || "Mixte");
+  const [editAvatar, setEditAvatar] = useState(user?.avatar || AVATAR_OPTIONS[0]);
+
+  // Determine Level based on XP
+  const getLevelInfo = (score: number) => {
+    if (score < 500) return { title: "Nouveau Croyant", next: 500, percent: Math.round((score / 500) * 100) };
+    if (score < 1200) return { title: "Explorateur Spirituel", next: 1200, percent: Math.round((score / 1200) * 100) };
+    if (score < 2500) return { title: "Initié Éclairé", next: 2500, percent: Math.round((score / 2500) * 100) };
+    return { title: "Sage Érudit", next: 5000, percent: Math.round((score / 5000) * 100) };
+  };
+
+  const levelInfo = getLevelInfo(xp);
 
   const handleCopyBookmark = (bm: BookmarkType) => {
     navigator.clipboard.writeText(`"${bm.verseText}" — ${bm.reference}`);
@@ -59,46 +91,256 @@ export default function ProfileView({
     setShowAddForm(false);
   };
 
+  const handleSaveProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    onUpdateProfile({
+      name: editName,
+      email: editEmail,
+      religion: editReligion,
+      avatar: editAvatar
+    });
+    setIsEditing(false);
+  };
+
   return (
     <div className="space-y-8 animate-fade-in pb-12">
       
       {/* Profile Overview Banner */}
-      <section className="bg-white dark:bg-charcoal-card rounded-2xl p-6 border border-cream-darker dark:border-charcoal-light/10 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6 text-center divide-y md:divide-y-0 md:divide-x divide-cream-darker dark:divide-charcoal-light/15">
-        <div className="space-y-1.5 py-2">
-          <p className="text-xs text-slate-400 dark:text-cream-base/50 uppercase tracking-widest font-semibold">Titre Spirituel</p>
-          <div className="flex items-center justify-center gap-2 text-emerald-medium dark:text-gold-bright">
-            <Award className="w-5 h-5" />
-            <h4 className="font-serif text-lg font-bold">Explorateur Sage</h4>
-          </div>
-          <p className="text-[11px] text-slate-400">Progression : 88% des quiz</p>
-        </div>
-
-        <div className="space-y-1.5 py-2">
-          <p className="text-xs text-slate-400 dark:text-cream-base/50 uppercase tracking-widest font-semibold">Énergie d'Étude</p>
-          <p className="font-serif text-2xl font-bold text-emerald-deep dark:text-cream-base">{xp} XP</p>
-          <p className="text-[11px] text-slate-400">Prochain niveau à 1500 XP</p>
-        </div>
-
-        <div className="space-y-2 py-2">
-          <p className="text-xs text-slate-400 dark:text-cream-base/50 uppercase tracking-widest font-semibold">Présence</p>
-          <div className="flex items-center justify-center gap-1.5 text-gold-deep dark:text-gold-bright">
-            <Flame className="w-5 h-5 text-orange-500 animate-pulse" />
-            <h4 className="font-serif text-lg font-bold">{streak} jours d'affilée</h4>
-          </div>
-          
+      <section className="bg-white dark:bg-charcoal-card rounded-3xl p-6 border border-cream-darker dark:border-charcoal-light/10 shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 flex gap-2 z-10">
           <button
-            onClick={onCheckIn}
-            disabled={hasCheckedInToday}
-            className={`px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider transition-all border ${
-              hasCheckedInToday
-                ? "bg-green-500/10 text-green-600 border-green-500/20"
-                : "bg-gold-bright text-gold-deep hover:bg-gold-muted border-gold-muted/40 active:scale-95"
-            }`}
+            onClick={() => {
+              setEditName(user?.name || "");
+              setEditEmail(user?.email || "");
+              setEditReligion(user?.religion || "Mixte");
+              setEditAvatar(user?.avatar || AVATAR_OPTIONS[0]);
+              setIsEditing(!isEditing);
+            }}
+            className="p-2 text-slate-400 hover:text-emerald-medium dark:hover:text-gold-bright hover:bg-cream-base dark:hover:bg-charcoal-light/30 rounded-xl transition-all"
+            title="Modifier le Profil / Paramètres"
           >
-            {hasCheckedInToday ? "✓ Présence Enregistrée" : "S'enregistrer aujourd'hui (+50 XP)"}
+            <Settings className="w-5 h-5" />
+          </button>
+          <button
+            onClick={onLogout}
+            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
+            title="Se Déconnecter"
+          >
+            <LogOut className="w-5 h-5" />
           </button>
         </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+          {/* User Image & Avatar Info */}
+          <div className="md:col-span-4 flex flex-col items-center text-center space-y-3">
+            <div className="relative">
+              <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-gold-muted/80 shadow-md">
+                <img
+                  className="w-full h-full object-cover"
+                  src={user?.avatar || AVATAR_OPTIONS[0]}
+                  alt={user?.name || "User Avatar"}
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+              <span className="absolute -bottom-1 -right-1 bg-emerald-medium dark:bg-emerald-fixed text-white dark:text-charcoal-dark p-1.5 rounded-full border-2 border-white shadow-md dark:border-charcoal-card">
+                <Award className="w-3.5 h-3.5" />
+              </span>
+            </div>
+            
+            <div className="space-y-0.5">
+              <h3 className="font-serif text-lg font-bold text-emerald-deep dark:text-cream-base">
+                {user?.name || "Chercheur de Vérité"}
+              </h3>
+              <p className="font-mono text-[10px] text-slate-400 uppercase tracking-widest font-bold">
+                @{user?.username || "seeker"}
+              </p>
+              <div className="flex items-center justify-center gap-1.5 mt-1 bg-cream-darker dark:bg-charcoal-light/40 px-3 py-1 rounded-full border border-cream-darker/60">
+                {user?.religion === 'Chrétienne' ? (
+                  <BookOpen className="w-3.5 h-3.5 text-emerald-medium dark:text-emerald-fixed" />
+                ) : user?.religion === 'Musulmane' ? (
+                  <Moon className="w-3.5 h-3.5 text-gold-muted" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-medium dark:text-gold-bright" />
+                )}
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-cream-base/70">
+                  Sensibilité: {user?.religion || "Mixte"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Level Progress & Actions */}
+          <div className="md:col-span-8 flex flex-col justify-center space-y-4 md:border-l md:border-cream-darker dark:md:border-charcoal-light/15 md:pl-6">
+            <div className="grid grid-cols-2 gap-4 text-center sm:text-left">
+              <div className="space-y-1">
+                <p className="text-[10px] text-slate-400 dark:text-cream-base/50 uppercase tracking-widest font-bold">Titre Spirituel</p>
+                <h4 className="font-serif text-lg font-bold text-emerald-medium dark:text-gold-bright flex items-center justify-center sm:justify-start gap-1">
+                  <Award className="w-4 h-4" />
+                  <span>{levelInfo.title}</span>
+                </h4>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-[10px] text-slate-400 dark:text-cream-base/50 uppercase tracking-widest font-bold">Énergie d'Étude</p>
+                <p className="font-serif text-xl font-bold text-emerald-deep dark:text-cream-base">{xp} XP</p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs font-semibold">
+                <span className="text-slate-500">Progression du niveau</span>
+                <span className="text-emerald-medium dark:text-gold-bright font-mono">{levelInfo.percent}%</span>
+              </div>
+              <div className="w-full bg-cream-darker dark:bg-charcoal-light/30 h-2 rounded-full overflow-hidden border border-cream-darker/40">
+                <div
+                  className="bg-emerald-medium dark:bg-emerald-fixed h-full transition-all duration-300"
+                  style={{ width: `${levelInfo.percent}%` }}
+                ></div>
+              </div>
+              <p className="text-[10px] text-slate-400 italic">Plus que {levelInfo.next - (xp % levelInfo.next)} XP pour débloquer le titre suivant.</p>
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row justify-between items-center gap-3">
+              <div className="flex items-center gap-1.5 text-gold-deep dark:text-gold-bright">
+                <Flame className="w-5 h-5 text-orange-500 animate-pulse" />
+                <span className="font-serif text-sm font-bold">{streak} jours d'affilée</span>
+              </div>
+              
+              <button
+                onClick={onCheckIn}
+                disabled={hasCheckedInToday}
+                className={`w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border ${
+                  hasCheckedInToday
+                    ? "bg-green-500/10 text-green-600 border-green-500/20"
+                    : "bg-gold-bright text-gold-deep hover:bg-gold-muted border-gold-muted/40 active:scale-95"
+                }`}
+              >
+                {hasCheckedInToday ? "✓ Présence Enregistrée" : "S'enregistrer aujourd'hui (+50 XP)"}
+              </button>
+            </div>
+          </div>
+        </div>
       </section>
+
+      {/* Profile Editing Section Popup overlay style or expand block */}
+      <AnimatePresence>
+        {isEditing && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="bg-cream-darker/40 dark:bg-charcoal-card rounded-2xl p-6 border border-emerald-medium/10 space-y-4 overflow-hidden"
+          >
+            <div className="flex justify-between items-center">
+              <h4 className="font-serif text-base font-bold text-emerald-deep dark:text-cream-base">
+                Modifier mon Profil Spirituel
+              </h4>
+              <button
+                onClick={() => setIsEditing(false)}
+                className="p-1 rounded-full hover:bg-cream-darker dark:hover:bg-charcoal-light/30"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProfile} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold tracking-wider text-emerald-light dark:text-emerald-fixed block">
+                    Nom Complet
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full bg-white dark:bg-charcoal-dark border border-cream-darker dark:border-charcoal-light/15 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-emerald-medium text-slate-800 dark:text-cream-base"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold tracking-wider text-emerald-light dark:text-emerald-fixed block">
+                    Adresse Email
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    className="w-full bg-white dark:bg-charcoal-dark border border-cream-darker dark:border-charcoal-light/15 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-emerald-medium text-slate-800 dark:text-cream-base"
+                  />
+                </div>
+              </div>
+
+              {/* Religion Selector */}
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase font-bold tracking-wider text-emerald-light dark:text-emerald-fixed block">
+                  Ma Sensibilité Spirituelle
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['Chrétienne', 'Musulmane', 'Mixte'] as Religion[]).map((rel) => (
+                    <button
+                      key={rel}
+                      type="button"
+                      onClick={() => setEditReligion(rel)}
+                      className={`p-2.5 rounded-xl border flex items-center justify-center gap-1.5 transition-all text-center ${
+                        editReligion === rel
+                          ? 'bg-emerald-medium/10 border-emerald-medium text-emerald-medium dark:bg-emerald-fixed/15 dark:border-emerald-fixed dark:text-gold-bright font-bold'
+                          : 'bg-white dark:bg-charcoal-dark border-cream-darker dark:border-charcoal-light/15 text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      {rel === 'Chrétienne' ? <BookOpen className="w-3.5 h-3.5" /> : rel === 'Musulmane' ? <Moon className="w-3.5 h-3.5" /> : <Sparkles className="w-3.5 h-3.5" />}
+                      <span className="text-[10px] tracking-wider uppercase">{rel}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Avatar Selector */}
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase font-bold tracking-wider text-emerald-light dark:text-emerald-fixed block">
+                  Choisir mon Avatar
+                </label>
+                <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+                  {AVATAR_OPTIONS.map((avatar, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setEditAvatar(avatar)}
+                      className={`relative w-12 h-12 rounded-full overflow-hidden border-2 shrink-0 transition-all ${
+                        editAvatar === avatar ? 'border-emerald-medium dark:border-gold-bright scale-105' : 'border-transparent opacity-60 hover:opacity-100'
+                      }`}
+                    >
+                      <img src={avatar} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
+                      {editAvatar === avatar && (
+                        <span className="absolute inset-0 bg-emerald-medium/20 flex items-center justify-center">
+                          <CheckCircle className="w-4 h-4 text-white" />
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(false)}
+                  className="px-4 py-2 border border-cream-darker dark:border-charcoal-light/15 rounded-xl text-xs font-semibold text-slate-500"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-medium text-white dark:bg-emerald-fixed dark:text-charcoal-dark rounded-xl text-xs font-semibold hover:bg-emerald-deep"
+                >
+                  Enregistrer les modifications
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Asymmetric Split: Bookmarks (Mes Favoris) & Journal (Mes Notes) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

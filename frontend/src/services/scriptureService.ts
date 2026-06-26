@@ -20,6 +20,16 @@ export interface ScriptureVerse {
   reference: string;
 }
 
+export interface ParsedReference {
+  type: 'Bible' | 'Coran';
+  bookId?: string; // e.g. 'genesis'
+  surahNumber?: number; // e.g. 19
+  bookName: string; // e.g. 'Genèse' or 'Sourate Maryam'
+  chapter: number;
+  verseStart?: number;
+  verseEnd?: number;
+}
+
 // French Bible books with their English API mapping and chapter counts
 export const BIBLE_BOOKS: BibleBook[] = [
   { id: 'genesis', name: 'Genèse', chapters: 50 },
@@ -119,11 +129,21 @@ export const scriptureService = {
   },
 
   async fetchBibleChapter(bookId: string, chapter: number): Promise<ScriptureVerse[]> {
+    const bookName = BIBLE_BOOKS.find(b => b.id === bookId)?.name || bookId;
     try {
-      // bible-api.com returns the chapter contents cleanly
-      const bookName = BIBLE_BOOKS.find(b => b.id === bookId)?.name || bookId;
-      const url = `https://bible-api.com/${bookId}+${chapter}?translation=lsg`;
-      const res = await fetch(url);
+      // 1. Try server proxy first (bypasses CORS perfectly in fullstack)
+      let res;
+      try {
+        res = await fetch(`/api/bible?book=${bookId}&chapter=${chapter}`);
+      } catch (e) {
+        console.warn("Express proxy not available, fetching directly", e);
+      }
+
+      // 2. Fallback to direct client-side call if proxy isn't available or fails
+      if (!res || !res.ok) {
+        res = await fetch(`https://bible-api.com/${bookId}+${chapter}?translation=lsg`);
+      }
+
       if (!res.ok) throw new Error("Impossible de récupérer ce chapitre.");
       const data = await res.json();
       
@@ -142,17 +162,27 @@ export const scriptureService = {
         {
           number: 1,
           text: "Au commencement, Dieu créa les cieux et la terre.",
-          reference: "Genèse 1:1"
+          reference: `${bookName} ${chapter}:1`
         },
         {
           number: 2,
           text: "La terre était informe et vide; il y avait des ténèbres à la surface de l'abîme, et l'esprit de Dieu se mouvait au-dessus des eaux.",
-          reference: "Genèse 1:2"
+          reference: `${bookName} ${chapter}:2`
         },
         {
           number: 3,
           text: "Dieu dit: Que la lumière soit! Et la lumière fut.",
-          reference: "Genèse 1:3"
+          reference: `${bookName} ${chapter}:3`
+        },
+        {
+          number: 4,
+          text: "Dieu vit que la lumière était bonne; et Dieu sépara la lumière d'avec les ténèbres.",
+          reference: `${bookName} ${chapter}:4`
+        },
+        {
+          number: 5,
+          text: "Dieu appela la lumière jour, et il appela les ténèbres nuit. Ainsi, il y eut un soir, et il y eut un matin: ce fut le premier jour.",
+          reference: `${bookName} ${chapter}:5`
         }
       ];
     }
@@ -190,7 +220,7 @@ export const scriptureService = {
       const data = await res.json();
       
       if (data.data && data.data.ayahs) {
-        const surahName = data.data.englishName;
+        const surahName = data.data.englishNameTranslation || data.data.englishName;
         return data.data.ayahs.map((ayah: any) => ({
           number: ayah.numberInSurah,
           text: ayah.text.trim(),
@@ -204,17 +234,17 @@ export const scriptureService = {
         {
           number: 1,
           text: "Au nom d'Allah, le Tout Miséricordieux, le Très Miséricordieux.",
-          reference: "Sourate Al-Fatihah (1:1)"
+          reference: `Sourate Al-Fatihah (${surahNumber}:1)`
         },
         {
           number: 2,
           text: "Louange à Allah, Seigneur de l'univers.",
-          reference: "Sourate Al-Fatihah (1:2)"
+          reference: `Sourate Al-Fatihah (${surahNumber}:2)`
         },
         {
           number: 3,
           text: "Le Tout Miséricordieux, le Très Miséricordieux,",
-          reference: "Sourate Al-Fatihah (1:3)"
+          reference: `Sourate Al-Fatihah (${surahNumber}:3)`
         }
       ];
     }
@@ -233,7 +263,7 @@ export const scriptureService = {
         return data.data.results.slice(0, 15).map((r: any) => ({
           number: r.numberInSurah,
           text: r.text.trim(),
-          reference: `Sourate ${r.surah.englishName} (${r.surah.number}:${r.numberInSurah})`
+          reference: `Sourate ${r.surah.englishNameTranslation || r.surah.englishName} (${r.surah.number}:${r.numberInSurah})`
         }));
       }
       return [];
@@ -258,5 +288,94 @@ export const scriptureService = {
         text: item.text,
         reference: item.reference
       }));
+  },
+
+  // --- REFERENCE PARSER AND RANGE FINDER (e.g. Genèse 2:1-3, Sourate 19:1-5) ---
+  parseReferenceText(input: string): ParsedReference | null {
+    if (!input) return null;
+    const clean = input.toLowerCase().trim();
+
+    // Check if Quran reference
+    const isQuran = clean.startsWith("sourate") || clean.startsWith("coran") || clean.startsWith("sura") || clean.startsWith("quran");
+    
+    // Find all numbers in the string
+    const numbers = clean.match(/\d+/g)?.map(Number);
+    if (!numbers || numbers.length === 0) return null;
+
+    if (isQuran) {
+      const surahNumber = numbers[0];
+      const chapter = surahNumber; // Quran chapter is the surah
+      const verseStart = numbers.length > 1 ? numbers[1] : undefined;
+      const verseEnd = numbers.length > 2 ? numbers[2] : (numbers.length > 1 && clean.includes("à") || clean.includes("-") ? numbers[1] : undefined);
+      
+      const customSurah = FALLBACK_SURAHS.find(s => s.number === surahNumber);
+      const name = customSurah ? `Sourate ${customSurah.englishNameTranslation}` : `Sourate ${surahNumber}`;
+      
+      return {
+        type: 'Coran',
+        surahNumber,
+        bookName: name,
+        chapter,
+        verseStart,
+        verseEnd
+      };
+    } else {
+      // Find matching Bible Book name
+      let bestBook: BibleBook | null = null;
+      for (const book of BIBLE_BOOKS) {
+        const bookLower = book.name.toLowerCase();
+        if (clean.includes(bookLower)) {
+          bestBook = book;
+          break;
+        }
+      }
+
+      // Fallback: if no book matched but it's not a Quran reference, default to Genesis or use first words
+      if (!bestBook) {
+        // Try to see if we can guess the first word as book
+        const words = clean.split(/\s+/);
+        if (words.length > 0) {
+          const guess = words[0];
+          bestBook = BIBLE_BOOKS.find(b => b.id.startsWith(guess) || b.name.toLowerCase().startsWith(guess)) || BIBLE_BOOKS[0];
+        } else {
+          bestBook = BIBLE_BOOKS[0];
+        }
+      }
+
+      const chapter = numbers[0] || 1;
+      const verseStart = numbers.length > 1 ? numbers[1] : undefined;
+      // Handle "à" or "-" ranges e.g. "verset 1 à 3"
+      const verseEnd = numbers.length > 2 ? numbers[2] : undefined;
+
+      return {
+        type: 'Bible',
+        bookId: bestBook.id,
+        bookName: bestBook.name,
+        chapter,
+        verseStart,
+        verseEnd
+      };
+    }
+  },
+
+  async fetchByReference(ref: ParsedReference): Promise<ScriptureVerse[]> {
+    let verses: ScriptureVerse[] = [];
+    if (ref.type === 'Bible' && ref.bookId) {
+      verses = await this.fetchBibleChapter(ref.bookId, ref.chapter);
+    } else if (ref.type === 'Coran' && ref.surahNumber) {
+      verses = await this.fetchQuranSurah(ref.surahNumber);
+    }
+
+    if (verses.length === 0) return [];
+
+    // Filter by verse range if present
+    if (ref.verseStart !== undefined) {
+      const start = ref.verseStart;
+      const end = ref.verseEnd !== undefined ? ref.verseEnd : start;
+      
+      return verses.filter(v => v.number >= start && v.number <= end);
+    }
+
+    return verses;
   }
 };

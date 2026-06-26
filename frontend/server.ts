@@ -126,6 +126,29 @@ async function startServer() {
     }
   });
 
+  // API proxy route to bypass client CORS restrictions for bible-api.com
+  app.get("/api/bible", async (req, res) => {
+    try {
+      const { book, chapter } = req.query;
+      if (!book || !chapter) {
+        return res.status(400).json({ error: "book and chapter are required parameters" });
+      }
+      
+      const url = `https://bible-api.com/${encodeURIComponent(book as string)}+${encodeURIComponent(chapter as string)}?translation=lsg`;
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`External Bible API responded with status ${response.status}`);
+      }
+      
+      const data = await response.json();
+      res.json(data);
+    } catch (err: any) {
+      console.error("Bible proxy server error:", err);
+      res.status(500).json({ error: err.message || "Failed to fetch from Bible API" });
+    }
+  });
+
   // Serve static files in production / Vite middlewares in dev
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

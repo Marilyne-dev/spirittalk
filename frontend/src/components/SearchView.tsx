@@ -1,8 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, Book, Bookmark, Check, Copy, Tag, MessageSquare, BookOpen, ChevronRight, Loader2, RefreshCw } from 'lucide-react';
+import { 
+  Search, Book, Bookmark, Check, Copy, Tag, MessageSquare, BookOpen, 
+  ChevronRight, Loader2, RefreshCw, Compass, HelpCircle, ArrowRight 
+} from 'lucide-react';
 import { Verse } from '../types';
 import { SCRIPTURE_LIBRARY } from '../data';
-import { scriptureService, BIBLE_BOOKS, QuranSurah, ScriptureVerse } from '../services/scriptureService';
+import { scriptureService, BIBLE_BOOKS, QuranSurah, ScriptureVerse, ParsedReference } from '../services/scriptureService';
 
 interface SearchViewProps {
   onBookmark: (text: string, reference: string, source: string) => void;
@@ -12,8 +15,8 @@ interface SearchViewProps {
 const CATEGORIES = ["Tout", "Paix", "Sagesse", "Pardon", "Amour", "Confiance", "Patience", "Prière", "Espoir", "Méditation"];
 
 export default function SearchView({ onBookmark, onNavigateToChatWithQuery }: SearchViewProps) {
-  // Dual-mode tab state: 'search' or 'reader'
-  const [activeTab, setActiveTab] = useState<'search' | 'reader'>('search');
+  // Tabs: 'search' (thematic), 'reader' (integral), or 'reference' (lookup by exact coordinates)
+  const [activeTab, setActiveTab] = useState<'search' | 'reader' | 'reference'>('search');
   
   // Keyword Search states
   const [query, setQuery] = useState("");
@@ -25,6 +28,12 @@ export default function SearchView({ onBookmark, onNavigateToChatWithQuery }: Se
   // Quran live keyword results
   const [liveQuranResults, setLiveQuranResults] = useState<ScriptureVerse[]>([]);
   const [isSearchingQuran, setIsSearchingQuran] = useState(false);
+
+  // Reference Lookup states
+  const [refQuery, setRefQuery] = useState("");
+  const [lookupResults, setLookupResults] = useState<ScriptureVerse[]>([]);
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [lookupError, setLookupError] = useState<string | null>(null);
 
   // Live Reader states
   const [readerSource, setReaderSource] = useState<'Bible' | 'Coran'>('Bible');
@@ -53,6 +62,12 @@ export default function SearchView({ onBookmark, onNavigateToChatWithQuery }: Se
     return () => clearTimeout(delayDebounceFn);
   }, [query]);
 
+  // Detected reference in thematic search bar to guide user
+  const detectedSearchRef = useMemo(() => {
+    if (query.length < 4) return null;
+    return scriptureService.parseReferenceText(query);
+  }, [query]);
+
   // Combined keyword search results: Static library (Bible/Coran) + Quran Live Search results
   const combinedSearchResults = useMemo(() => {
     // 1. Filter local SCRIPTURE_LIBRARY
@@ -77,6 +92,29 @@ export default function SearchView({ onBookmark, onNavigateToChatWithQuery }: Se
 
     return [...localMatches, ...mappedQuranLive];
   }, [query, selectedCategory, sourceFilter, liveQuranResults]);
+
+  // --- Reference Lookup Trigger ---
+  const handleReferenceLookup = async (parsedRef?: ParsedReference) => {
+    const targetRef = parsedRef || scriptureService.parseReferenceText(refQuery);
+    if (!targetRef) {
+      setLookupError("Nous n'avons pas réussi à comprendre cette référence. Essayez un format standard comme 'Genèse 2:1-3' ou 'Sourate 19 versets 1 à 5'.");
+      return;
+    }
+
+    setIsLookingUp(true);
+    setLookupError(null);
+    try {
+      const results = await scriptureService.fetchByReference(targetRef);
+      setLookupResults(results);
+      if (results.length === 0) {
+        setLookupError("Aucun verset trouvé pour cette référence dans nos bases de données.");
+      }
+    } catch (err: any) {
+      setLookupError(err.message || "Erreur de chargement. Veuillez vérifier votre connexion.");
+    } finally {
+      setIsLookingUp(false);
+    }
+  };
 
   // --- Reader Mode Logic ---
   // Load Quran surah list on reader activation
@@ -144,43 +182,59 @@ export default function SearchView({ onBookmark, onNavigateToChatWithQuery }: Se
         <div className="space-y-1">
           <h2 className="font-serif text-2xl font-bold text-emerald-deep dark:text-cream-base flex items-center gap-2">
             <BookOpen className="w-6 h-6 text-emerald-medium" />
-            <span>Explorateur d'Écritures</span>
+            <span>Explorateur d'Écritures Sacrées</span>
           </h2>
           <p className="text-xs text-slate-500 dark:text-cream-base/60 leading-relaxed">
-            Accédez à la Bible Catholique (Louis Segond) et au Coran (Hamidullah) au complet avec nos outils de recherche et de lecture intégrale.
+            Accédez à la Bible de Jérusalem et au Coran de Hamidullah. Recherchez par thèmes ou accédez directement aux chapitres et sourates.
           </p>
         </div>
       </div>
 
-      {/* Primary Tab Selector (Search vs. Reader) */}
-      <div className="flex bg-cream-darker/40 dark:bg-charcoal-card/40 p-1 rounded-xl border border-cream-darker dark:border-charcoal-light/10">
+      {/* Primary Tab Selector (Thematic vs Reader vs Exact Reference) */}
+      <div className="grid grid-cols-3 bg-cream-darker/40 dark:bg-charcoal-card/40 p-1 rounded-xl border border-cream-darker dark:border-charcoal-light/10">
         <button
           onClick={() => setActiveTab('search')}
-          className={`flex-1 py-2.5 rounded-lg text-xs font-bold tracking-wide uppercase transition-all flex items-center justify-center gap-2 ${
+          className={`py-2.5 rounded-lg text-xs font-bold tracking-wide uppercase transition-all flex items-center justify-center gap-2 ${
             activeTab === 'search'
               ? 'bg-white dark:bg-charcoal-card text-emerald-deep dark:text-gold-bright shadow-sm border border-cream-darker/10 dark:border-charcoal-light/5'
               : 'text-slate-500 hover:text-slate-700 dark:hover:text-cream-base/80'
           }`}
         >
           <Search className="w-3.5 h-3.5" />
-          <span>Recherche Thématique</span>
+          <span className="hidden sm:inline">Thematique</span>
+          <span className="sm:hidden">Thème</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('reference')}
+          className={`py-2.5 rounded-lg text-xs font-bold tracking-wide uppercase transition-all flex items-center justify-center gap-2 ${
+            activeTab === 'reference'
+              ? 'bg-white dark:bg-charcoal-card text-emerald-deep dark:text-gold-bright shadow-sm border border-cream-darker/10 dark:border-charcoal-light/5'
+              : 'text-slate-500 hover:text-slate-700 dark:hover:text-cream-base/80'
+          }`}
+        >
+          <Compass className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Référence de Précision</span>
+          <span className="sm:hidden">Référence</span>
+        </button>
+
         <button
           onClick={() => setActiveTab('reader')}
-          className={`flex-1 py-2.5 rounded-lg text-xs font-bold tracking-wide uppercase transition-all flex items-center justify-center gap-2 ${
+          className={`py-2.5 rounded-lg text-xs font-bold tracking-wide uppercase transition-all flex items-center justify-center gap-2 ${
             activeTab === 'reader'
               ? 'bg-white dark:bg-charcoal-card text-emerald-deep dark:text-gold-bright shadow-sm border border-cream-darker/10 dark:border-charcoal-light/5'
               : 'text-slate-500 hover:text-slate-700 dark:hover:text-cream-base/80'
           }`}
         >
           <Book className="w-3.5 h-3.5" />
-          <span>Lecteur Intégral (Live API)</span>
+          <span className="hidden sm:inline">Lecteur Intégral</span>
+          <span className="sm:hidden">Lecteur</span>
         </button>
       </div>
 
-      {/* --- TAB CONTENT: SEARCH MODE --- */}
+      {/* --- TAB CONTENT: THEMATIC SEARCH MODE --- */}
       {activeTab === 'search' && (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-fade-in">
           {/* Search Input Bar */}
           <div className="glass-panel rounded-xl p-2 flex items-center gap-2 border border-emerald-medium/10 shadow-md bg-white/80 dark:bg-charcoal-card/85">
             <Search className="w-5 h-5 text-slate-400 ml-2" />
@@ -203,6 +257,29 @@ export default function SearchView({ onBookmark, onNavigateToChatWithQuery }: Se
               </button>
             )}
           </div>
+
+          {/* Prompt reference suggestion card if detected */}
+          {detectedSearchRef && (
+            <div className="p-4 rounded-xl bg-emerald-medium/5 border border-emerald-medium/20 text-emerald-deep dark:text-cream-base flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-sm">
+              <div className="flex items-center gap-2">
+                <Compass className="w-4 h-4 text-emerald-medium shrink-0 animate-pulse" />
+                <span>
+                  Nous avons détecté une référence exacte : <strong>{detectedSearchRef.bookName} {detectedSearchRef.chapter}{detectedSearchRef.verseStart ? `:${detectedSearchRef.verseStart}` : ''}{detectedSearchRef.verseEnd ? `-${detectedSearchRef.verseEnd}` : ''}</strong>.
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  setRefQuery(query);
+                  setActiveTab('reference');
+                  handleReferenceLookup(detectedSearchRef);
+                }}
+                className="px-3.5 py-1.5 bg-[#1D3557] hover:bg-emerald-deep text-white font-bold rounded-lg text-[10px] uppercase tracking-wider flex items-center gap-1 shrink-0 self-end sm:self-auto"
+              >
+                <span>Slicer ce passage</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          )}
 
           {/* Filters: Source and Categories */}
           <div className="space-y-3 shrink-0">
@@ -366,9 +443,131 @@ export default function SearchView({ onBookmark, onNavigateToChatWithQuery }: Se
         </div>
       )}
 
+      {/* --- TAB CONTENT: EXACT REFERENCE CHOPPING / SLICING --- */}
+      {activeTab === 'reference' && (
+        <div className="space-y-6 animate-fade-in">
+          
+          {/* Reference lookup bar */}
+          <div className="bg-white dark:bg-charcoal-card p-6 rounded-2xl border border-cream-darker dark:border-charcoal-light/10 shadow-sm space-y-4">
+            <h3 className="font-serif font-bold text-base text-emerald-deep dark:text-cream-base">
+              Extraction de passage précis par coordonnées
+            </h3>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Tapez n'importe quelle adresse biblique ou coranique en français (ex: <strong>Genèse 2:1-3</strong>, <strong>Jean 3 verset 16</strong>, ou <strong>Sourate 19 versets 1 à 5</strong>). Notre système s'occupe de découper l'intervalle exact désiré.
+            </p>
+
+            <form onSubmit={(e) => { e.preventDefault(); handleReferenceLookup(); }} className="flex gap-2">
+              <input
+                type="text"
+                value={refQuery}
+                onChange={(e) => setRefQuery(e.target.value)}
+                placeholder="ex: Jean 3:16 ou Sourate 112:1-4"
+                className="flex-grow bg-cream-base/30 dark:bg-charcoal-dark border border-cream-darker dark:border-charcoal-light/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-medium text-emerald-deep dark:text-cream-base font-semibold"
+              />
+              <button
+                type="submit"
+                disabled={isLookingUp}
+                className="px-6 py-3 bg-emerald-medium text-white font-bold text-xs uppercase tracking-wider rounded-xl hover:bg-emerald-deep transition-colors flex items-center gap-1.5"
+              >
+                {isLookingUp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Compass className="w-4 h-4" />}
+                <span>Slicer</span>
+              </button>
+            </form>
+
+            {lookupError && (
+              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/10 text-rose-500 text-xs font-semibold">
+                {lookupError}
+              </div>
+            )}
+          </div>
+
+          {/* Results Container */}
+          <div className="space-y-4">
+            {isLookingUp ? (
+              <div className="text-center py-20 bg-white dark:bg-charcoal-card border border-cream-darker dark:border-charcoal-light/10 rounded-2xl">
+                <Loader2 className="w-8 h-8 text-emerald-medium animate-spin mx-auto mb-3" />
+                <p className="text-xs text-slate-400 font-medium">Découpage de l'intervalle d'Écritures en cours...</p>
+              </div>
+            ) : lookupResults.length > 0 ? (
+              <div className="bg-white dark:bg-charcoal-card rounded-2xl border border-cream-darker dark:border-charcoal-light/10 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 bg-cream-base/20 dark:bg-charcoal-light/5 border-b border-cream-darker dark:border-charcoal-light/10 flex items-center justify-between">
+                  <span className="font-serif font-bold text-sm text-emerald-deep dark:text-cream-base">
+                    Passage extrait : {refQuery}
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-medium/10 text-emerald-deep dark:text-gold-bright text-[10px] font-bold uppercase tracking-wider">
+                    {lookupResults.length} verset{lookupResults.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+
+                <div className="p-6 space-y-6">
+                  {lookupResults.map((verse) => {
+                    const id = `lookup_${verse.reference}`;
+                    const isSaved = savedIds[id];
+                    const isCopied = copiedId === id;
+
+                    return (
+                      <div key={verse.number} className="space-y-2 pb-4 border-b border-cream-darker/40 last:border-0 last:pb-0">
+                        <div className="flex items-center justify-between">
+                          <span className="w-6 h-6 rounded-md bg-cream-base dark:bg-charcoal-dark flex items-center justify-center text-[10px] font-bold text-slate-500 dark:text-cream-base">
+                            v.{verse.number}
+                          </span>
+
+                          <div className="flex gap-1.5">
+                            <button
+                              onClick={() => handleSave(verse.text, verse.reference, "Référence", id)}
+                              className={`p-1 rounded text-[10px] flex items-center gap-1 transition-all ${
+                                isSaved ? "text-green-600 bg-green-500/10 border-green-500/20 font-bold" : "border border-cream-darker dark:border-charcoal-light/10 text-slate-400 hover:bg-slate-50"
+                              }`}
+                            >
+                              <Bookmark className="w-3 h-3" />
+                              <span>{isSaved ? "Enregistré" : "Sauvegarder"}</span>
+                            </button>
+                            <button
+                              onClick={() => handleCopy(verse.text, verse.reference, id)}
+                              className={`p-1 rounded text-[10px] flex items-center gap-1 transition-all ${
+                                isCopied ? "text-emerald-medium bg-emerald-fixed/20 border-emerald-medium/20 font-bold" : "border border-cream-darker dark:border-charcoal-light/10 text-slate-400 hover:bg-slate-50"
+                              }`}
+                            >
+                              {isCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                              <span>{isCopied ? "Copié !" : "Copier"}</span>
+                            </button>
+                            <button
+                              onClick={() => onNavigateToChatWithQuery(`Explique-moi en profondeur théologique ce passage : "${verse.text}" (${verse.reference})`)}
+                              className="p-1 rounded border border-cream-darker dark:border-charcoal-light/10 text-slate-400 hover:bg-slate-50 text-[10px] flex items-center gap-1 transition-colors"
+                            >
+                              <MessageSquare className="w-3 h-3" />
+                              <span>Commenter par l'IA</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <p className="text-sm md:text-base leading-relaxed text-emerald-deep dark:text-cream-base font-sans font-medium">
+                          {verse.text}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-16 bg-white dark:bg-charcoal-card border border-cream-darker dark:border-charcoal-light/10 rounded-2xl">
+                <Compass className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="font-serif text-lg font-bold text-emerald-deep dark:text-cream-base">
+                  Prêt pour l'extraction
+                </p>
+                <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+                  Entrez des coordonnées valides ci-dessus et cliquez sur Slicer pour charger l'extrait exact en direct.
+                </p>
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
+
       {/* --- TAB CONTENT: LIVE READER MODE --- */}
       {activeTab === 'reader' && (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-fade-in">
           
           {/* Controls Bar */}
           <div className="bg-white dark:bg-charcoal-card p-5 rounded-2xl border border-cream-darker dark:border-charcoal-light/10 shadow-sm space-y-4">
@@ -525,22 +724,23 @@ export default function SearchView({ onBookmark, onNavigateToChatWithQuery }: Se
                   </button>
                 </div>
               ) : (
-                <div className="space-y-6 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="space-y-6 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar font-serif leading-relaxed text-slate-800 dark:text-cream-base">
                   {/* Bismillah for Quran surahs except Surah 9 (At-Tawbah) */}
                   {readerSource === 'Coran' && selectedSurah !== 9 && (
                     <div className="text-center pb-4 border-b border-cream-darker/30 dark:border-charcoal-light/5">
                       <p className="font-serif text-lg font-bold text-gold-deep dark:text-gold-bright">
                         بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
                       </p>
-                      <p className="text-xs italic text-slate-400 mt-1">
+                      <p className="text-xs italic text-slate-400 mt-1 font-sans">
                         "Au nom d'Allah, le Tout Miséricordieux, le Très Miséricordieux."
                       </p>
                     </div>
                   )}
 
                   {chapterVerses.map((verse) => {
-                    const isSaved = savedIds[`reader_${verse.reference}`];
-                    const isCopied = copiedId === `reader_${verse.reference}`;
+                    const id = `reader_${verse.reference}`;
+                    const isSaved = savedIds[id];
+                    const isCopied = copiedId === id;
                     
                     // Filter out duplicate Bismillah text from verses in Surah 1 or other surahs if they already include it
                     let displayText = verse.text;
@@ -573,7 +773,7 @@ export default function SearchView({ onBookmark, onNavigateToChatWithQuery }: Se
                           {/* Single Verse Micro Actions */}
                           <div className="flex gap-1.5 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
-                              onClick={() => handleSave(displayText, verse.reference, readerSource, `reader_${verse.reference}`)}
+                              onClick={() => handleSave(displayText, verse.reference, readerSource, id)}
                               className={`p-1 rounded border text-[10px] flex items-center gap-1 transition-all ${
                                 isSaved 
                                   ? "text-green-600 bg-green-500/10 border-green-500/20 font-bold" 
@@ -586,11 +786,11 @@ export default function SearchView({ onBookmark, onNavigateToChatWithQuery }: Se
                             </button>
 
                             <button
-                              onClick={() => handleCopy(displayText, verse.reference, `reader_${verse.reference}`)}
+                              onClick={() => handleCopy(displayText, verse.reference, id)}
                               className={`p-1 rounded border text-[10px] flex items-center gap-1 transition-all ${
                                 isCopied 
                                   ? "text-emerald-medium bg-emerald-fixed/20 border-emerald-medium/20 font-bold" 
-                                  : "border-cream-darker dark:border-charcoal-light/10 text-slate-400 hover:bg-slate-50 dark:hover:bg-charcoal-light/30"
+                                  : "border-cream-darker dark:border-charcoal-light/10 text-slate-400 hover:bg-slate-50"
                               }`}
                               title="Copier"
                             >

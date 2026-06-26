@@ -9,52 +9,60 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller {
     public function register(Request $request) {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'username' => 'required|string|max:255|unique:users',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:6',
+        $fields = $request->validate([
+            'name' => 'required|string',
+            'username' => 'required|string|unique:users',
+            'email' => 'required|string|unique:users|email',
+            'password' => 'required|string',
+            'religion' => 'required|string|in:Chrétienne,Musulmane,Mixte'
         ]);
 
         $user = User::create([
-            'name' => $request->name,
-            'username' => $request->username,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'avatar' => 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200', // Avatar par défaut
-            'level' => 'Explorateur',
-            'xp_points' => 0
+            'name' => $fields['name'],
+            'username' => $fields['username'],
+            'email' => $fields['email'],
+            'password' => bcrypt($fields['password']),
+            'religion' => $fields['religion'],
+            'avatar' => $fields['religion'] === 'Chrétienne' 
+                ? 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=200' 
+                : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200'
         ]);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $token = $user->createToken('spirittalktoken')->plainTextToken;
 
-        return response()->json([
-            'token' => $token,
-            'user' => $user
-        ], 201);
+        return response(['user' => $user, 'token' => $token], 201);
     }
 
     public function login(Request $request) {
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required',
+        $fields = $request->validate([
+            'email' => 'required|string|email',
+            'password' => 'required|string'
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $user = User::where('email', $fields['email'])->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
-            throw ValidationException::withMessages([
-                'email' => ['Les identifiants fournis sont incorrects.'],
-            ]);
+        if (!$user || !Hash::check($fields['password'], $user->password)) {
+            return response(['message' => 'Identifiants incorrects'], 401);
         }
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $token = $user->createToken('spirittalktoken')->plainTextToken;
 
-        return response()->json([
-            'token' => $token,
-            'user' => $user
-        ]);
+        return response(['user' => $user, 'token' => $token], 200);
     }
+
+    public function updateProfile(Request $request) {
+        $user = $request->user();
+        $fields = $request->validate([
+            'name' => 'sometimes|string',
+            'email' => 'sometimes|string|email',
+            'religion' => 'sometimes|string|in:Chrétienne,Musulmane,Mixte',
+            'avatar' => 'sometimes|string'
+        ]);
+
+        $user->update($fields);
+        return response(['user' => $user, 'message' => 'Profil mis à jour !'], 200);
+    }
+
 
     public function logout(Request $request) {
         $request->user()->currentAccessToken()->delete();

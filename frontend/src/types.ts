@@ -61,3 +61,16 @@ export interface ChatMessage {
     source: string;
   };
 }
+
+export type Religion = 'Chrétienne' | 'Musulmane' | 'Mixte';
+
+export interface User {
+  id: string;
+  name: string;
+  username: string;
+  email: string;
+  religion: Religion;
+  avatar?: string;
+  level: string;
+  xp_points: number;
+}
