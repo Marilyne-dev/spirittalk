@@ -477,135 +477,240 @@ export default function CommunityView({
       )}
 
       {/* --- TAB CONTENT: MEMBERS & FRIENDS --- */}
-      {activeTab === 'friends' && (
-        <div className="space-y-6">
-          {/* Controls Search */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
-            <div className="glass-panel rounded-xl p-2 flex items-center gap-2 border border-cream-darker bg-white/80 dark:bg-charcoal-card/80">
-              <Search className="w-4 h-4 text-slate-400 ml-1.5" />
-              <input
-                type="text"
-                value={friendsSearch}
-                onChange={(e) => setFriendsSearch(e.target.value)}
-                placeholder="Rechercher des membres..."
-                className="flex-grow bg-transparent border-none focus:outline-none text-xs text-emerald-deep dark:text-cream-base py-1"
-              />
-            </div>
+      {activeTab === 'friends' && (() => {
+        const myRelations = filteredFriends.filter(f => f.status && f.status !== 'none');
+        const discoverRelations = filteredFriends.filter(f => !f.status || f.status === 'none');
 
-            <div className="flex gap-1 justify-end">
-              <button
-                onClick={() => setFriendsFilter('All')}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${
-                  friendsFilter === 'All'
-                    ? 'bg-slate-700 text-white shadow-sm'
-                    : 'bg-slate-100 dark:bg-charcoal-card text-slate-500'
-                }`}
-              >
-                Tous
-              </button>
-              <button
-                onClick={() => setFriendsFilter('Chrétienne')}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${
-                  friendsFilter === 'Chrétienne'
-                    ? 'bg-emerald-medium text-white shadow-sm'
-                    : 'bg-slate-100 dark:bg-charcoal-card text-slate-500'
-                }`}
-              >
-                Chrétiens
-              </button>
-              <button
-                onClick={() => setFriendsFilter('Musulmane')}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${
-                  friendsFilter === 'Musulmane'
-                    ? 'bg-gold-deep text-white shadow-sm'
-                    : 'bg-slate-100 dark:bg-charcoal-card text-slate-500'
-                }`}
-              >
-                Musulmans
-              </button>
-            </div>
-          </div>
-
-          {/* Members list */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredFriends.map((friend) => {
-              const isAccepted = friend.status === 'accepted';
-              const isPendingSent = friend.status === 'pending_sent';
-              const isPendingReceived = friend.status === 'pending_received';
-
-              return (
-                <div key={friend.id} className="bg-white dark:bg-charcoal-card p-5 rounded-2xl border border-cream-darker dark:border-charcoal-light/10 shadow-sm flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-200">
-                        <img src={friend.avatar} className="w-full h-full object-cover" alt="" />
-                      </div>
-                      {friend.isOnline && (
-                        <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="font-serif text-sm font-bold text-emerald-deep dark:text-cream-base flex items-center gap-1.5">
-                        {friend.name}
-                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wide ${
-                          friend.religion === 'Chrétienne' ? 'bg-emerald-medium/10 text-emerald-medium' : 'bg-gold-deep/10 text-gold-deep'
-                        }`}>
-                          {friend.religion}
-                        </span>
-                      </h4>
-                      <p className="text-[10px] text-slate-400">@{friend.username}</p>
-                      {friend.profession && (
-                        <p className="text-[10px] text-slate-500 dark:text-cream-base/60 italic mt-0.5">{friend.profession}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex gap-2">
-                    {isAccepted ? (
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={onNavigateToChat}
-                          className="px-3 py-1.5 bg-[#1D3557] hover:bg-emerald-deep text-white font-bold text-[10px] uppercase tracking-wide rounded-lg"
-                        >
-                          Inbox
-                        </button>
-                        <button
-                          onClick={() => onRemoveFriend(friend.id)}
-                          className="px-2 py-1.5 border border-cream-darker hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg text-[10px]"
-                          title="Retirer"
-                        >
-                          X
-                        </button>
-                      </div>
-                    ) : isPendingSent ? (
-                      <span className="px-3 py-1.5 bg-slate-100 text-slate-400 font-bold text-[10px] uppercase rounded-lg border border-slate-200">
-                        En attente
-                      </span>
-                    ) : isPendingReceived ? (
-                      <button
-                        onClick={() => onAcceptFriendRequest(friend.id)}
-                        className="px-3 py-1.5 bg-emerald-medium hover:bg-emerald-deep text-white font-bold text-[10px] uppercase tracking-wide rounded-lg flex items-center gap-1"
-                      >
-                        <UserCheck className="w-3.5 h-3.5" />
-                        <span>Accepter</span>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => onSendFriendRequest(friend.id)}
-                        className="px-3 py-1.5 border border-[#759486] hover:bg-emerald-medium/10 text-[#759486] font-bold text-[10px] uppercase tracking-wide rounded-lg flex items-center gap-1"
-                      >
-                        <UserPlus className="w-3.5 h-3.5" />
-                        <span>Ajouter</span>
-                      </button>
-                    )}
-                  </div>
+        return (
+          <div className="space-y-6">
+            {/* User's Public Profile Card - Facebook-style indicator */}
+            <div className="bg-gradient-to-r from-emerald-medium/10 via-emerald-deep/5 to-gold-deep/10 border border-cream-darker dark:border-charcoal-light/10 p-5 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-emerald-medium shrink-0 shadow-sm">
+                  <img 
+                    src={user?.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200"} 
+                    className="w-full h-full object-cover" 
+                    alt="" 
+                    referrerPolicy="no-referrer" 
+                  />
                 </div>
-              );
-            })}
+                <div>
+                  <span className="text-[9px] uppercase font-bold text-emerald-medium tracking-wider bg-emerald-medium/10 px-2.5 py-0.5 rounded-full">Mon Profil Communautaire (Public)</span>
+                  <h4 className="font-serif text-base font-bold text-slate-800 dark:text-cream-base flex items-center gap-2 mt-1">
+                    {user?.name}
+                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wide ${
+                      user?.religion === 'Chrétienne' ? 'bg-emerald-medium/10 text-emerald-medium' : 'bg-gold-deep/10 text-gold-deep'
+                    }`}>
+                      Fidèle {user?.religion}
+                    </span>
+                  </h4>
+                  <p className="text-[10px] text-slate-400">@{user?.username || 'utilisateur'} • {user?.profession || 'Membres Actif de la Communauté'}</p>
+                </div>
+              </div>
+              <div className="text-left md:text-right shrink-0">
+                <div className="text-[10px] text-slate-500 dark:text-cream-base/60">
+                  Statut : <span className="font-bold text-green-500 animate-pulse">● En ligne</span>
+                </div>
+                <p className="text-[9px] text-slate-400 mt-1">Vous êtes visible dans l'annuaire public</p>
+              </div>
+            </div>
+
+            {/* Controls Search */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+              <div className="glass-panel rounded-xl p-2 flex items-center gap-2 border border-cream-darker bg-white/80 dark:bg-charcoal-card/80">
+                <Search className="w-4 h-4 text-slate-400 ml-1.5" />
+                <input
+                  type="text"
+                  value={friendsSearch}
+                  onChange={(e) => setFriendsSearch(e.target.value)}
+                  placeholder="Rechercher des membres..."
+                  className="flex-grow bg-transparent border-none focus:outline-none text-xs text-emerald-deep dark:text-cream-base py-1"
+                />
+              </div>
+
+              <div className="flex gap-1 justify-end">
+                <button
+                  onClick={() => setFriendsFilter('All')}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${
+                    friendsFilter === 'All'
+                      ? 'bg-slate-700 text-white shadow-sm'
+                      : 'bg-slate-100 dark:bg-charcoal-card text-slate-500'
+                  }`}
+                >
+                  Tous
+                </button>
+                <button
+                  onClick={() => setFriendsFilter('Chrétienne')}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${
+                    friendsFilter === 'Chrétienne'
+                      ? 'bg-emerald-medium text-white shadow-sm'
+                      : 'bg-slate-100 dark:bg-charcoal-card text-slate-500'
+                  }`}
+                >
+                  Chrétiens
+                </button>
+                <button
+                  onClick={() => setFriendsFilter('Musulmane')}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${
+                    friendsFilter === 'Musulmane'
+                      ? 'bg-gold-deep text-white shadow-sm'
+                      : 'bg-slate-100 dark:bg-charcoal-card text-slate-500'
+                  }`}
+                >
+                  Musulmans
+                </button>
+              </div>
+            </div>
+
+            {/* SECTION 1: Mes Relations Fraternelles */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-serif text-sm font-bold text-slate-700 dark:text-cream-base flex items-center gap-1.5">
+                  <span>Mes Relations Fraternelles ({myRelations.length})</span>
+                </h3>
+                <span className="h-px bg-cream-darker dark:bg-charcoal-light/10 flex-grow ml-3"></span>
+              </div>
+
+              {myRelations.length === 0 ? (
+                <div className="text-center py-6 px-4 bg-slate-50/50 dark:bg-charcoal-card/20 rounded-2xl border border-dashed border-cream-darker text-slate-400 text-xs italic">
+                  Vous n'avez pas encore de relations fraternelles établies. Ajoutez des fidèles ci-dessous pour démarrer des échanges spirituels !
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {myRelations.map((friend) => {
+                    const isAccepted = friend.status === 'accepted';
+                    const isPendingSent = friend.status === 'pending_sent';
+                    const isPendingReceived = friend.status === 'pending_received';
+
+                    return (
+                      <div key={friend.id} className="bg-white dark:bg-charcoal-card p-4 rounded-2xl border border-cream-darker dark:border-charcoal-light/10 shadow-sm flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-200">
+                              <img src={friend.avatar} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
+                            </div>
+                            {friend.isOnline && (
+                              <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
+                            )}
+                          </div>
+                          <div>
+                            <h4 className="font-serif text-sm font-bold text-emerald-deep dark:text-cream-base flex items-center gap-1.5">
+                              {friend.name}
+                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wide ${
+                                friend.religion === 'Chrétienne' ? 'bg-emerald-medium/10 text-emerald-medium' : 'bg-gold-deep/10 text-gold-deep'
+                              }`}>
+                                {friend.religion}
+                              </span>
+                            </h4>
+                            <p className="text-[10px] text-slate-400">@{friend.username}</p>
+                            {friend.profession && (
+                              <p className="text-[10px] text-slate-500 dark:text-cream-base/60 italic mt-0.5">{friend.profession}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex gap-2 shrink-0">
+                          {isAccepted ? (
+                            <div className="flex gap-1.5">
+                              <button
+                                onClick={onNavigateToChat}
+                                className="px-3 py-1.5 bg-[#1D3557] hover:bg-emerald-deep text-white font-bold text-[10px] uppercase tracking-wide rounded-lg"
+                              >
+                                Inbox
+                              </button>
+                              <button
+                                onClick={() => onRemoveFriend(friend.id)}
+                                className="px-2 py-1.5 border border-cream-darker hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg text-[10px]"
+                                title="Retirer"
+                              >
+                                X
+                              </button>
+                            </div>
+                          ) : isPendingSent ? (
+                            <span className="px-3 py-1.5 bg-slate-100 dark:bg-charcoal-dark text-slate-400 font-bold text-[10px] uppercase rounded-lg border border-slate-200 dark:border-charcoal-light/10">
+                              En attente
+                            </span>
+                          ) : isPendingReceived ? (
+                            <button
+                              onClick={() => onAcceptFriendRequest(friend.id)}
+                              className="px-3 py-1.5 bg-emerald-medium hover:bg-emerald-deep text-white font-bold text-[10px] uppercase tracking-wide rounded-lg flex items-center gap-1"
+                            >
+                              <UserCheck className="w-3.5 h-3.5" />
+                              <span>Accepter</span>
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* SECTION 2: Découvrir d'autres fidèles */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-serif text-sm font-bold text-slate-700 dark:text-cream-base flex items-center gap-1.5">
+                  <span>Découvrir d'autres fidèles ({discoverRelations.length})</span>
+                </h3>
+                <span className="h-px bg-cream-darker dark:bg-charcoal-light/10 flex-grow ml-3"></span>
+              </div>
+
+              {discoverRelations.length === 0 ? (
+                <div className="text-center py-6 px-4 bg-slate-50/50 dark:bg-charcoal-card/20 rounded-2xl border border-dashed border-cream-darker text-slate-400 text-xs italic">
+                  Aucun autre fidèle à découvrir pour le moment.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {discoverRelations.map((friend) => {
+                    return (
+                      <div key={friend.id} className="bg-white dark:bg-charcoal-card p-4 rounded-2xl border border-cream-darker dark:border-charcoal-light/10 shadow-sm flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-200">
+                              <img src={friend.avatar} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
+                            </div>
+                            {friend.isOnline && (
+                              <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
+                            )}
+                          </div>
+                          <div>
+                            <h4 className="font-serif text-sm font-bold text-emerald-deep dark:text-cream-base flex items-center gap-1.5">
+                              {friend.name}
+                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wide ${
+                                friend.religion === 'Chrétienne' ? 'bg-emerald-medium/10 text-emerald-medium' : 'bg-gold-deep/10 text-gold-deep'
+                              }`}>
+                                {friend.religion}
+                              </span>
+                            </h4>
+                            <p className="text-[10px] text-slate-400">@{friend.username}</p>
+                            {friend.profession && (
+                              <p className="text-[10px] text-slate-500 dark:text-cream-base/60 italic mt-0.5">{friend.profession}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex gap-2 shrink-0">
+                          <button
+                            onClick={() => onSendFriendRequest(friend.id)}
+                            className="px-3 py-1.5 border border-[#759486] hover:bg-emerald-medium/10 text-[#759486] font-bold text-[10px] uppercase tracking-wide rounded-lg flex items-center gap-1"
+                          >
+                            <UserPlus className="w-3.5 h-3.5" />
+                            <span>Ajouter</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* --- TAB CONTENT: NOTIFICATIONS --- */}
       {activeTab === 'notifications' && (

@@ -120,7 +120,7 @@ export interface Friend {
   avatar: string;
   religion: Religion;
   profession?: string;
-  status: 'accepted' | 'pending_sent' | 'pending_received';
+  status: 'accepted' | 'pending_sent' | 'pending_received' | 'none';
   isOnline?: boolean;
   isTyping?: boolean;
 }

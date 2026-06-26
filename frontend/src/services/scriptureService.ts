@@ -141,7 +141,20 @@ export const scriptureService = {
 
       // 2. Fallback to direct client-side call if proxy isn't available or fails
       if (!res || !res.ok) {
-        res = await fetch(`https://bible-api.com/${bookId}+${chapter}?translation=lsg`);
+        const directUrl = `https://bible-api.com/${bookId}+${chapter}?translation=lsg`;
+        try {
+          res = await fetch(directUrl);
+          if (!res.ok) {
+            throw new Error(`Direct fetch failed with status ${res.status}`);
+          }
+        } catch (e) {
+          console.warn("Direct fetch failed or blocked by CORS, trying open CORS proxy...", e);
+          try {
+            res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(directUrl)}`);
+          } catch (corsErr) {
+            console.error("CORS proxy also failed", corsErr);
+          }
+        }
       }
 
       if (!res.ok) throw new Error("Impossible de récupérer ce chapitre.");

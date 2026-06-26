@@ -329,7 +329,18 @@ export default function InboxView({
                               const aud = new Audio(msg.audioUrl);
                               aud.play();
                             } else {
-                              alert("Lecture de la note vocale simulée : 'Que la paix de Dieu soit avec toi aujourd'hui !'");
+                              if ('speechSynthesis' in window) {
+                                window.speechSynthesis.cancel();
+                                const textToSpeak = msg.senderId === 'me'
+                                  ? "Ceci est votre note vocale spirituelle enregistrée sur SpiritTalk."
+                                  : (msg.text || "Que la paix de Dieu soit avec toi aujourd'hui ! C'est un bonheur d'échanger avec toi.");
+                                const utterance = new SpeechSynthesisUtterance(textToSpeak);
+                                utterance.lang = 'fr-FR';
+                                utterance.rate = 0.95;
+                                window.speechSynthesis.speak(utterance);
+                              } else {
+                                console.warn("Speech synthesis not supported");
+                              }
                             }
                           }}
                           className={`p-2.5 rounded-full flex items-center justify-center transition-all ${

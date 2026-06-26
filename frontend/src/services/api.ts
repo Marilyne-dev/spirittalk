@@ -304,6 +304,7 @@ export const apiService = {
         method: 'GET',
         headers: getHeaders(),
       });
+      if (!response.ok) throw new Error('Server returned ' + response.status);
       return await response.json();
     } catch (error) {
       console.warn("Failed to fetch public inspirations from Laravel backend", error);
@@ -324,6 +325,7 @@ export const apiService = {
           is_public: true
         }),
       });
+      if (!response.ok) throw new Error('Server returned ' + response.status);
       return await response.json();
     } catch (error) {
       console.warn("Failed to create public inspiration on Laravel backend", error);
@@ -337,6 +339,7 @@ export const apiService = {
         method: 'POST',
         headers: getHeaders(),
       });
+      if (!response.ok) throw new Error('Server returned ' + response.status);
       return await response.json();
     } catch (error) {
       console.warn("Failed to like inspiration on Laravel backend", error);
@@ -351,6 +354,7 @@ export const apiService = {
         method: 'GET',
         headers: getHeaders(),
       });
+      if (!response.ok) throw new Error('Server returned ' + response.status);
       const data = await response.json();
       return data.map((item: any) => ({
         id: item.id.toString(),
@@ -387,6 +391,7 @@ export const apiService = {
           completed
         }),
       });
+      if (!response.ok) throw new Error('Server returned ' + response.status);
       return response.ok;
     } catch (error) {
       console.warn("Failed to update reading progress on Laravel backend, saving locally", error);

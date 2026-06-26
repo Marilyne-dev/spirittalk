@@ -85,6 +85,56 @@ const PRE_SEEDED_FRIENDS: Friend[] = [
     profession: "Architecte",
     isOnline: false,
     status: 'pending_received'
+  },
+  {
+    id: 'user_sarah',
+    name: "Sarah Dubois",
+    username: "sarah_d",
+    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200",
+    religion: "Chrétienne",
+    profession: "Médecin Généraliste",
+    isOnline: true,
+    status: 'none'
+  },
+  {
+    id: 'user_bilal',
+    name: "Bilal Mansouri",
+    username: "bilal_m",
+    avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=200",
+    religion: "Musulmane",
+    profession: "Ingénieur Agronome",
+    isOnline: true,
+    status: 'none'
+  },
+  {
+    id: 'user_claire',
+    name: "Claire Laurent",
+    username: "claire_laur",
+    avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200",
+    religion: "Chrétienne",
+    profession: "Journaliste Littéraire",
+    isOnline: false,
+    status: 'none'
+  },
+  {
+    id: 'user_ibrahim',
+    name: "Ibrahim Alami",
+    username: "ibrahim_al",
+    avatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=200",
+    religion: "Musulmane",
+    profession: "Calligraphe d'Art",
+    isOnline: true,
+    status: 'none'
+  },
+  {
+    id: 'user_youssef',
+    name: "Youssef Bensalah",
+    username: "youssef_ben",
+    avatar: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=200",
+    religion: "Musulmane",
+    profession: "Bâtisseur Humanitaire",
+    isOnline: false,
+    status: 'none'
   }
 ];
 
@@ -571,6 +621,25 @@ export default function App() {
     handleAddXP(10);
   };
 
+  const playPusherPing = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+      osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.12); // A5
+      gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.35);
+    } catch (e) {
+      console.warn("Web Audio chime blocked or unsupported", e);
+    }
+  };
+
   const handleSendFriendRequest = (friendId: string) => {
     setFriends(prev => prev.map(f => {
       if (f.id === friendId) {
@@ -578,7 +647,42 @@ export default function App() {
       }
       return f;
     }));
-    alert("Demande de fraternité envoyée !");
+
+    // Play a sending chime
+    playPusherPing();
+
+    // Auto-approve after 3.5 seconds to simulate other user accepting and notify
+    setTimeout(() => {
+      setFriends(prev => prev.map(f => {
+        if (f.id === friendId) {
+          return { ...f, status: 'accepted', isOnline: true };
+        }
+        return f;
+      }));
+
+      // Play double-tone notification sound for the accepted friend
+      playPusherPing();
+
+      // Retrieve name from the fresh state
+      setFriends(currentFriends => {
+        const acceptedFriend = currentFriends.find(f => f.id === friendId);
+        const name = acceptedFriend ? acceptedFriend.name : 'Un fidèle';
+
+        const newNotif: SpiritNotification = {
+          id: `notif_accept_auto_${Date.now()}`,
+          title: "Fraternité acceptée ! 🤝",
+          description: `Vous avez un ami qui vous a accepté : ${name} est maintenant connecté avec vous. Vous pouvez communiquer !`,
+          time: "À l'instant",
+          isRead: false,
+          type: 'friend_accept'
+        };
+
+        setNotifications(prev => [newNotif, ...prev]);
+        return currentFriends;
+      });
+
+      handleAddXP(40);
+    }, 3500);
   };
 
   const handleAcceptFriendRequest = (friendId: string) => {
@@ -654,6 +758,7 @@ export default function App() {
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         setDirectMessages(prev => [...prev, replyMsg]);
+        playPusherPing();
         
         const newNotif: SpiritNotification = {
           id: `notif_msg_${Date.now()}`,
