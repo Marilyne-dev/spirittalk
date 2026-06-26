@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 class InspirationController extends Controller {
     public function index() {
         // Charge toutes les inspirations publiques avec les détails de l'utilisateur qui l'a créée
-        $inspirations = Inspiration::with('user')
+        $inspirations = Inspiration::with(['user', 'comments.user'])
             ->where('is_public', true)
             ->orderBy('created_at', 'desc')
             ->get();
@@ -22,6 +22,8 @@ class InspirationController extends Controller {
             'verse_reference' => 'nullable|string',
             'verse_text' => 'nullable|string',
             'source' => 'nullable|string',
+            'images' => 'nullable|array',
+            'video_url' => 'nullable|string',
             'is_public' => 'boolean'
         ]);
 
@@ -31,7 +33,7 @@ class InspirationController extends Controller {
         $user = $request->user();
         $user->increment('xp_points', 30);
 
-        return response()->json(Inspiration::with('user')->find($inspiration->id), 201);
+        return response()->json(Inspiration::with(['user', 'comments.user'])->find($inspiration->id), 201);
     }
 
     public function like($id) {
@@ -42,5 +44,19 @@ class InspirationController extends Controller {
             'id' => $inspiration->id,
             'likes' => $inspiration->likes
         ]);
+    }
+
+    public function comment(Request $request, $id) {
+        $fields = $request->validate([
+            'content' => 'required|string',
+        ]);
+
+        $inspiration = Inspiration::findOrFail($id);
+        $comment = $inspiration->comments()->create([
+            'user_id' => $request->user()->id,
+            'content' => $fields['content'],
+        ]);
+
+        return response()->json($comment->load('user'), 201);
     }
 }

@@ -37,4 +37,20 @@ class User extends Authenticatable {
     public function inspirations() {
         return $this->hasMany(Inspiration::class);
     }
+
+    public function sentFriendRequests() {
+        return $this->hasMany(Friendship::class, 'requester_id');
+    }
+
+    public function receivedFriendRequests() {
+        return $this->hasMany(Friendship::class, 'addressee_id');
+    }
+
+    public function sentMessages() {
+        return $this->hasMany(DirectMessage::class, 'sender_id');
+    }
+
+    public function receivedMessages() {
+        return $this->hasMany(DirectMessage::class, 'recipient_id');
+    }
 }

@@ -367,7 +367,7 @@ export const apiService = {
     }
   },
 
-  async createInspiration(content: string, verseReference?: string, verseText?: string, source?: string) {
+  async createInspiration(content: string, verseReference?: string, verseText?: string, source?: string, images?: string[], videoUrl?: string) {
     try {
       const response = await fetch(`${API_BASE_URL}/inspirations`, {
         method: 'POST',
@@ -377,6 +377,8 @@ export const apiService = {
           verse_reference: verseReference,
           verse_text: verseText,
           source,
+          images,
+          video_url: videoUrl,
           is_public: true
         }),
       });
@@ -384,6 +386,21 @@ export const apiService = {
       return await response.json();
     } catch (error) {
       console.warn("Failed to create public inspiration on Laravel backend", error);
+      return null;
+    }
+  },
+
+  async addInspirationComment(id: string, content: string) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/inspirations/${id}/comments`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ content }),
+      });
+      if (!response.ok) throw new Error('Server returned ' + response.status);
+      return await response.json();
+    } catch (error) {
+      console.warn("Failed to add comment on Laravel backend", error);
       return null;
     }
   },
@@ -463,6 +480,98 @@ export const apiService = {
       });
       localStorage.setItem('spirittalk_reading_plans', JSON.stringify(updated));
       return true;
+    }
+  },
+
+  async getFriendships(): Promise<any[]> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/friendships`, {
+        method: 'GET',
+        headers: getHeaders(),
+      });
+      if (!response.ok) throw new Error('Server returned ' + response.status);
+      return await response.json();
+    } catch (error) {
+      console.warn("Failed to fetch friendships from Laravel backend", error);
+      return [];
+    }
+  },
+
+  async sendFriendRequest(userId: string) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/friendships`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ user_id: userId }),
+      });
+      if (!response.ok) throw new Error('Server returned ' + response.status);
+      return await response.json();
+    } catch (error) {
+      console.warn("Failed to send friend request to Laravel backend", error);
+      return null;
+    }
+  },
+
+  async acceptFriendRequest(userId: string) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/friendships/${userId}/accept`, {
+        method: 'POST',
+        headers: getHeaders(),
+      });
+      if (!response.ok) throw new Error('Server returned ' + response.status);
+      return await response.json();
+    } catch (error) {
+      console.warn("Failed to accept friend request on Laravel backend", error);
+      return null;
+    }
+  },
+
+  async removeFriend(userId: string) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/friendships/${userId}`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+      });
+      return response.ok;
+    } catch (error) {
+      console.warn("Failed to remove friendship on Laravel backend", error);
+      return false;
+    }
+  },
+
+  async getDirectMessages(): Promise<any[]> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/direct-messages`, {
+        method: 'GET',
+        headers: getHeaders(),
+      });
+      if (!response.ok) throw new Error('Server returned ' + response.status);
+      return await response.json();
+    } catch (error) {
+      console.warn("Failed to fetch direct messages from Laravel backend", error);
+      return [];
+    }
+  },
+
+  async sendDirectMessage(recipientId: string, text?: string, images?: string[], audioUrl?: string, audioDuration?: string, callType?: 'audio' | 'video') {
+    try {
+      const response = await fetch(`${API_BASE_URL}/direct-messages`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          recipient_id: recipientId,
+          text,
+          images,
+          audio_url: audioUrl,
+          audio_duration: audioDuration,
+          call_type: callType
+        }),
+      });
+      if (!response.ok) throw new Error('Server returned ' + response.status);
+      return await response.json();
+    } catch (error) {
+      console.warn("Failed to send direct message to Laravel backend", error);
+      return null;
     }
   },
 
