@@ -409,5 +409,59 @@ export const apiService = {
       localStorage.setItem('spirittalk_reading_plans', JSON.stringify(updated));
       return true;
     }
+  },
+
+  async getRegisteredUsers(): Promise<any[]> {
+    const endpoints = [`${API_BASE_URL}/users`, `${API_BASE_URL}/members`, `${API_BASE_URL}/all-users`];
+    for (const url of endpoints) {
+      try {
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: getHeaders()
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (Array.isArray(data)) {
+            return data;
+          } else if (data && Array.isArray(data.users)) {
+            return data.users;
+          }
+        }
+      } catch (err) {
+        console.warn(`Failed to fetch users from ${url}`, err);
+      }
+    }
+    
+    // Fallback: harvest users from public inspirations!
+    try {
+      const response = await fetch(`${API_BASE_URL}/inspirations`, {
+        method: 'GET',
+        headers: getHeaders()
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          const harvested: Record<string, any> = {};
+          data.forEach((item: any) => {
+            if (item.user && item.user.id) {
+              harvested[item.user.id] = {
+                id: item.user.id.toString(),
+                name: item.user.name,
+                username: item.user.username,
+                avatar: item.user.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
+                religion: item.user.religion || 'Mixte',
+                profession: item.user.profession || "Fidèle de la Communauté",
+                isOnline: Math.random() > 0.4
+              };
+            }
+          });
+          return Object.values(harvested);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to harvest users from inspirations", err);
+    }
+    
+    return [];
   }
 };

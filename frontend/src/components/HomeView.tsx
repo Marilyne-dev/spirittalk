@@ -14,6 +14,9 @@ interface HomeViewProps {
   onBookmark: (text: string, reference: string, source: string) => void;
   onAddXP: (amount: number) => void;
   onNavigateToChatWithQuery?: (prompt: string) => void;
+  posts?: CommunityPost[];
+  onAddPost?: (content: string, images?: string[], videoUrl?: string, verse_reference?: string, verse_text?: string) => void;
+  onLikePost?: (id: string) => void;
 }
 
 interface CommunityPost {
@@ -75,14 +78,17 @@ export default function HomeView({
   onSelectInspiration,
   onBookmark,
   onAddXP,
-  onNavigateToChatWithQuery
+  onNavigateToChatWithQuery,
+  posts: parentPosts,
+  onAddPost,
+  onLikePost
 }: HomeViewProps) {
   const [verseIdx, setVerseIdx] = useState(0);
   const [plans, setPlans] = useState<ReadingPlan[]>(READING_PLANS);
   const [votedVerse, setVotedVerse] = useState<Record<string, boolean>>({});
   
   // Community Feed states
-  const [posts, setPosts] = useState<CommunityPost[]>(() => {
+  const [localPosts, setLocalPosts] = useState<CommunityPost[]>(() => {
     const saved = localStorage.getItem('spirittalk_posts');
     return saved ? JSON.parse(saved) : PRESEED_POSTS;
   });
@@ -90,13 +96,18 @@ export default function HomeView({
   const [selectedVerseRef, setSelectedVerseRef] = useState("");
   const [feedFilter, setFeedFilter] = useState<'All' | 'Chrétienne' | 'Musulmane'>('All');
 
+  const displayPosts = parentPosts || localPosts;
+
   // Save posts to local state
   useEffect(() => {
-    localStorage.setItem('spirittalk_posts', JSON.stringify(posts));
-  }, [posts]);
+    if (!parentPosts) {
+      localStorage.setItem('spirittalk_posts', JSON.stringify(localPosts));
+    }
+  }, [localPosts, parentPosts]);
 
   // Load custom community posts from backend if possible
   useEffect(() => {
+    if (parentPosts) return;
     const loadBackendInspirations = async () => {
       const data = await apiService.getInspirations();
       if (data && Array.isArray(data)) {
@@ -113,11 +124,11 @@ export default function HomeView({
           verse_reference: item.verse_reference,
           verse_text: item.verse_text
         }));
-        setPosts(mapped);
+        setLocalPosts(mapped);
       }
     };
     loadBackendInspirations();
-  }, []);
+  }, [parentPosts]);
 
   const userReligion: Religion = user?.religion || 'Mixte';
 
@@ -209,35 +220,43 @@ export default function HomeView({
       verse_text: attachedVerseText || undefined
     };
 
-    setPosts(prev => [newPost, ...prev]);
+    if (onAddPost) {
+      onAddPost(newPostText.trim(), undefined, undefined, attachedVerseRef || undefined, attachedVerseText || undefined);
+    } else {
+      setLocalPosts(prev => [newPost, ...prev]);
+      // Try posting to Laravel AlwaysData backend
+      await apiService.createInspiration(
+        newPostText.trim(),
+        attachedVerseRef || undefined,
+        attachedVerseText || undefined,
+        attachedVerseRef ? (attachedVerseRef.includes('Coran') ? 'Coran' : 'Bible') : undefined
+      );
+    }
+
     setNewPostText("");
     setSelectedVerseRef("");
     onAddXP(30); // +30 XP for sharing wisdom in community!
-
-    // Try posting to Laravel AlwaysData backend
-    await apiService.createInspiration(
-      newPostText.trim(),
-      attachedVerseRef || undefined,
-      attachedVerseText || undefined,
-      attachedVerseRef ? (attachedVerseRef.includes('Coran') ? 'Coran' : 'Bible') : undefined
-    );
   };
 
   // Like community post
   const handleLikePost = async (id: string) => {
-    setPosts(prev => prev.map(p => {
-      if (p.id === id) {
-        const isLiked = !p.likedByMe;
-        return {
-          ...p,
-          likes: isLiked ? p.likes + 1 : Math.max(0, p.likes - 1),
-          likedByMe: isLiked
-        };
-      }
-      return p;
-    }));
+    if (onLikePost) {
+      onLikePost(id);
+    } else {
+      setLocalPosts(prev => prev.map(p => {
+        if (p.id === id) {
+          const isLiked = !p.likedByMe;
+          return {
+            ...p,
+            likes: isLiked ? p.likes + 1 : Math.max(0, p.likes - 1),
+            likedByMe: isLiked
+          };
+        }
+        return p;
+      }));
 
-    await apiService.likeInspiration(id);
+      await apiService.likeInspiration(id);
+    }
   };
 
   return (
@@ -564,7 +583,7 @@ export default function HomeView({
 
         {/* Post Lists */}
         <div className="space-y-4">
-          {posts
+          {displayPosts
             .filter(p => feedFilter === 'All' || p.religion === feedFilter || p.religion === 'Mixte')
             .map((post) => (
               <div

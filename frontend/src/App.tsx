@@ -421,6 +421,83 @@ export default function App() {
     };
   }, [user, friends]);
 
+  // Synchroniser les actualités/posts avec la vraie base de données de l'API
+  useEffect(() => {
+    if (!user) return;
+    const loadBackendInspirations = async () => {
+      try {
+        const data = await apiService.getInspirations();
+        if (data && Array.isArray(data)) {
+          const mapped = data.map((item: any) => ({
+            id: item.id.toString(),
+            name: item.user?.name || 'Anonyme',
+            username: item.user?.username || 'user',
+            avatar: item.user?.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
+            content: item.content,
+            religion: item.user?.religion || 'Mixte',
+            likes: item.likes || item.likes_count || 0,
+            likedByMe: item.is_liked || false,
+            time: new Date(item.created_at).toLocaleDateString('fr-FR'),
+            verse_reference: item.verse_reference,
+            verse_text: item.verse_text,
+            comments: item.comments || []
+          }));
+          setPosts(mapped);
+        }
+      } catch (err) {
+        console.warn("Could not load backend posts", err);
+      }
+    };
+    loadBackendInspirations();
+  }, [user]);
+
+  // Charger et fusionner tous les utilisateurs enregistrés dans la base de données
+  useEffect(() => {
+    if (!user) return;
+    const fetchAndMergeUsers = async () => {
+      try {
+        const backendUsers = await apiService.getRegisteredUsers();
+        if (backendUsers && backendUsers.length > 0) {
+          setFriends(prevFriends => {
+            const updated = [...prevFriends];
+            backendUsers.forEach((bu: any) => {
+              // Ne pas s'ajouter soi-même
+              const isMe = bu.email === user.email || bu.username === user.username || bu.id?.toString() === user.id?.toString() || bu.id_user?.toString() === user.id?.toString();
+              if (isMe) return;
+
+              const buId = bu.id?.toString() || bu.username;
+              const existsIdx = updated.findIndex(f => f.id === buId || f.username === bu.username);
+              
+              const standardized = {
+                id: buId,
+                name: bu.name,
+                username: bu.username,
+                avatar: bu.avatar || "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200",
+                religion: bu.religion || 'Mixte',
+                profession: bu.profession || "Fidèle de la Communauté",
+                status: existsIdx >= 0 ? updated[existsIdx].status : 'none',
+                isOnline: bu.isOnline !== undefined ? bu.isOnline : (Math.random() > 0.4),
+              };
+              
+              if (existsIdx >= 0) {
+                updated[existsIdx] = {
+                  ...standardized,
+                  status: updated[existsIdx].status
+                };
+              } else {
+                updated.push(standardized);
+              }
+            });
+            return updated;
+          });
+        }
+      } catch (err) {
+        console.warn("Could not fetch and merge registered users", err);
+      }
+    };
+    fetchAndMergeUsers();
+  }, [user]);
+
   const handleAddXP = (amount: number) => {
     setXp(prev => prev + amount);
   };
@@ -567,14 +644,14 @@ export default function App() {
   };
 
   // Community & Direct Messaging Handlers
-  const handleCreatePost = (content: string, images?: string[], videoUrl?: string, verse_reference?: string, verse_text?: string) => {
+  const handleCreatePost = async (content: string, images?: string[], videoUrl?: string, verse_reference?: string, verse_text?: string) => {
     const newPost: CommunityPost = {
       id: `post_${Date.now()}`,
-      name: user.name || 'Chercheur anonyme',
-      username: user.username || 'me',
-      avatar: user.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200",
+      name: user?.name || 'Chercheur anonyme',
+      username: user?.username || 'me',
+      avatar: user?.avatar || "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200",
       content,
-      religion: user.religion || 'Mixte',
+      religion: user?.religion || 'Mixte',
       likes: 0,
       likedByMe: false,
       time: "À l'instant",
@@ -586,19 +663,55 @@ export default function App() {
     };
     setPosts(prev => [newPost, ...prev]);
     handleAddXP(30);
+
+    try {
+      await apiService.createInspiration(
+        content.trim(),
+        verse_reference || undefined,
+        verse_text || undefined,
+        verse_reference ? (verse_reference.includes('Coran') ? 'Coran' : 'Bible') : undefined
+      );
+      // Reload inspirations to get database IDs and state
+      const data = await apiService.getInspirations();
+      if (data && Array.isArray(data)) {
+        const mapped = data.map((item: any) => ({
+          id: item.id.toString(),
+          name: item.user?.name || 'Anonyme',
+          username: item.user?.username || 'user',
+          avatar: item.user?.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
+          content: item.content,
+          religion: item.user?.religion || 'Mixte',
+          likes: item.likes || item.likes_count || 0,
+          likedByMe: item.is_liked || false,
+          time: new Date(item.created_at).toLocaleDateString('fr-FR'),
+          verse_reference: item.verse_reference,
+          verse_text: item.verse_text,
+          comments: item.comments || []
+        }));
+        setPosts(mapped);
+      }
+    } catch (e) {
+      console.warn("Failed to create inspiration on backend", e);
+    }
   };
 
-  const handleLikePost = (postId: string) => {
+  const handleLikePost = async (postId: string) => {
     setPosts(prev => prev.map(post => {
       if (post.id === postId) {
         return {
           ...post,
-          likes: post.likedByMe ? post.likes - 1 : post.likes + 1,
+          likes: post.likedByMe ? Math.max(0, post.likes - 1) : post.likes + 1,
           likedByMe: !post.likedByMe
         };
       }
       return post;
     }));
+
+    try {
+      await apiService.likeInspiration(postId);
+    } catch (e) {
+      console.warn("Failed to like inspiration on backend", e);
+    }
   };
 
   const handleAddComment = (postId: string, content: string) => {
@@ -927,6 +1040,9 @@ export default function App() {
               onBookmark={handleAddBookmark}
               onAddXP={handleAddXP}
               onNavigateToChatWithQuery={handleNavigateToChatWithQuery}
+              posts={posts}
+              onAddPost={handleCreatePost}
+              onLikePost={handleLikePost}
             />
           )}
 

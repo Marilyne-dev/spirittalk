@@ -20,12 +20,12 @@ interface ProfileViewProps {
 }
 
 const AVATAR_OPTIONS = [
-  'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200',
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200',
-  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200',
-  'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=200',
-  'https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=200',
-  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200'
+  'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
+  'https://images.unsplash.com/photo-1507152832244-10d45c7eda57?q=80&w=200',
+  'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?q=80&w=200',
+  'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=200',
+  'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?q=80&w=200',
+  'https://images.unsplash.com/photo-1506277886164-e25aa3f4ef7f?q=80&w=200'
 ];
 
 export default function ProfileView({
@@ -337,9 +337,9 @@ export default function ProfileView({
               {/* Avatar Selector */}
               <div className="space-y-2">
                 <label className="text-[10px] uppercase font-bold tracking-wider text-emerald-light dark:text-emerald-fixed block">
-                  Choisir mon Avatar
+                  Choisir mon Avatar (ou importer ma photo)
                 </label>
-                <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+                <div className="flex items-center gap-3 overflow-x-auto pb-2 no-scrollbar">
                   {AVATAR_OPTIONS.map((avatar, idx) => (
                     <button
                       key={idx}
@@ -357,6 +357,48 @@ export default function ProfileView({
                       )}
                     </button>
                   ))}
+
+                  {/* Show custom uploaded avatar if not in presets */}
+                  {editAvatar && !AVATAR_OPTIONS.includes(editAvatar) && (
+                    <button
+                      type="button"
+                      onClick={() => setEditAvatar(editAvatar)}
+                      className="relative w-12 h-12 rounded-full overflow-hidden border-2 shrink-0 transition-all border-emerald-medium dark:border-gold-bright scale-105"
+                    >
+                      <img src={editAvatar} className="w-full h-full object-cover" alt="Custom photo" referrerPolicy="no-referrer" />
+                      <span className="absolute inset-0 bg-emerald-medium/20 flex items-center justify-center">
+                        <CheckCircle className="w-4 h-4 text-white" />
+                      </span>
+                    </button>
+                  )}
+
+                  {/* File Upload Button */}
+                  <div className="relative shrink-0">
+                    <label 
+                      title="Importer une photo depuis vos fichiers locaux"
+                      className="flex flex-col items-center justify-center w-12 h-12 rounded-full border-2 border-dashed border-slate-300 dark:border-charcoal-light/30 cursor-pointer bg-slate-50/50 dark:bg-charcoal-dark hover:bg-slate-100 dark:hover:bg-charcoal-card transition-all"
+                    >
+                      <Plus className="w-5 h-5 text-slate-500 dark:text-cream-base" />
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                              const base64Str = event.target?.result as string;
+                              if (base64Str) {
+                                setEditAvatar(base64Str);
+                              }
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
                 </div>
               </div>
 
