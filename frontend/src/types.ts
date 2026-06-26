@@ -117,6 +117,7 @@ export interface Friend {
   id: string;
   name: string;
   username: string;
+  email?: string;
   avatar: string;
   religion: Religion;
   profession?: string;

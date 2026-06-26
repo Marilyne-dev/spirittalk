@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Heart, MessageCircle, Share2, Plus, Image as ImageIcon, Video, Send, 
@@ -19,6 +19,7 @@ interface CommunityViewProps {
   onRemoveFriend: (friendId: string) => void;
   onClearNotification: (notifId: string) => void;
   onNavigateToChat: () => void;
+  onSearchMembers: (query: string) => void;
 }
 
 export default function CommunityView({
@@ -33,7 +34,8 @@ export default function CommunityView({
   onAcceptFriendRequest,
   onRemoveFriend,
   onClearNotification,
-  onNavigateToChat
+  onNavigateToChat,
+  onSearchMembers
 }: CommunityViewProps) {
   const [activeTab, setActiveTab] = useState<'feed' | 'friends' | 'notifications'>('feed');
   const [feedFilter, setFeedFilter] = useState<'All' | 'Chrétienne' | 'Musulmane'>('All');
@@ -52,6 +54,15 @@ export default function CommunityView({
   // Friends search filter
   const [friendsSearch, setFriendsSearch] = useState('');
   const [friendsFilter, setFriendsFilter] = useState<'All' | 'Chrétienne' | 'Musulmane'>('All');
+
+  useEffect(() => {
+    if (activeTab !== 'friends') return;
+    const timeoutId = window.setTimeout(() => {
+      onSearchMembers(friendsSearch);
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [activeTab, friendsSearch, onSearchMembers]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -523,7 +534,7 @@ export default function CommunityView({
                   type="text"
                   value={friendsSearch}
                   onChange={(e) => setFriendsSearch(e.target.value)}
-                  placeholder="Rechercher des membres..."
+                  placeholder="Rechercher par nom, prenom ou @username..."
                   className="flex-grow bg-transparent border-none focus:outline-none text-xs text-emerald-deep dark:text-cream-base py-1"
                 />
               </div>

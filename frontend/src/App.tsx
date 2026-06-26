@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { Home, Sparkles, Search, User, Award, Moon, Sun, Bell, MessageSquare, Users, MessageCircle } from 'lucide-react';
 import { ChatMessage, Bookmark, Note, InspirationCard, Religion, CommunityPost, Friend, DirectMessage, SpiritNotification } from './types';
 import HomeView from './components/HomeView';
@@ -657,6 +657,55 @@ export default function App() {
     fetchAndMergeUsers();
   }, [user]);
 
+  const handleSearchMembers = useCallback(async (query: string) => {
+    if (!user) return;
+
+    try {
+      const backendUsers = await apiService.getRegisteredUsers(query);
+      if (!backendUsers || backendUsers.length === 0) return;
+
+      setFriends(prevFriends => {
+        const updated = [...prevFriends];
+        backendUsers.forEach((bu: any) => {
+          const isMe = bu.email === user.email || bu.username === user.username || bu.id?.toString() === user.id?.toString() || bu.id_user?.toString() === user.id?.toString();
+          if (isMe) return;
+
+          const buId = bu.id?.toString() || bu.username;
+          const existsIdx = updated.findIndex(f =>
+            f.id === buId ||
+            f.username === bu.username ||
+            (!!f.email && !!bu.email && f.email.toLowerCase() === bu.email.toLowerCase())
+          );
+
+          const standardized = {
+            id: buId,
+            name: bu.name,
+            username: bu.username,
+            email: bu.email,
+            avatar: bu.avatar || "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200",
+            religion: bu.religion || 'Mixte',
+            profession: bu.profession || "Fidele de la Communaute",
+            status: existsIdx >= 0 ? updated[existsIdx].status : 'none',
+            isOnline: bu.isOnline !== undefined ? bu.isOnline : (Math.random() > 0.4),
+          };
+
+          if (existsIdx >= 0) {
+            updated[existsIdx] = {
+              ...updated[existsIdx],
+              ...standardized,
+              status: updated[existsIdx].status
+            };
+          } else {
+            updated.push(standardized);
+          }
+        });
+        return updated;
+      });
+    } catch (err) {
+      console.warn("Could not search registered users", err);
+    }
+  }, [user]);
+
   const handleAddXP = (amount: number) => {
     setXp(prev => prev + amount);
   };
@@ -1273,7 +1322,8 @@ export default function App() {
               onAcceptFriendRequest={handleAcceptFriendRequest}
               onRemoveFriend={handleRemoveFriend}
               onClearNotification={(notifId) => setNotifications(prev => prev.filter(n => n.id !== notifId))}
-              onNavigateToChat={() => setCurrentTab('chat')}
+              onNavigateToChat={() => setCurrentTab('inbox')}
+              onSearchMembers={handleSearchMembers}
             />
           )}
 

@@ -15,6 +15,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'profile']);
     Route::post('/user/update', [AuthController::class, 'updateProfile']);
+    Route::get('/users', [AuthController::class, 'users']);
     
     // Notes de Réflexion (Journal)
     Route::apiResource('user-notes', UserNoteController::class);

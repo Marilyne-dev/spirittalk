@@ -466,12 +466,14 @@ export const apiService = {
     }
   },
 
-  async getRegisteredUsers(): Promise<any[]> {
+  async getRegisteredUsers(search = ''): Promise<any[]> {
     const localUsersStr = localStorage.getItem('spirittalk_simulated_users');
     const localUsers = localUsersStr ? JSON.parse(localUsersStr) : [];
     
     let backendUsers: any[] = [];
-    const endpoints = [`${API_BASE_URL}/users`, `${API_BASE_URL}/members`, `${API_BASE_URL}/all-users`];
+    const query = search.trim();
+    const queryString = query ? `?search=${encodeURIComponent(query)}` : '';
+    const endpoints = [`${API_BASE_URL}/users${queryString}`, `${API_BASE_URL}/members${queryString}`, `${API_BASE_URL}/all-users${queryString}`];
     for (const url of endpoints) {
       try {
         const response = await fetch(url, {
@@ -543,7 +545,15 @@ export const apiService = {
       }
     });
 
-    localUsers.forEach((u: any) => {
+    localUsers
+      .filter((u: any) => {
+        if (!query) return true;
+        const needle = query.toLowerCase();
+        return [u.name, u.username, u.email, u.profession]
+          .filter(Boolean)
+          .some((value: string) => value.toLowerCase().startsWith(needle) || value.toLowerCase().includes(` ${needle}`));
+      })
+      .forEach((u: any) => {
       const key = (u.email || u.username || u.id?.toString() || '').toLowerCase();
       if (key && !merged[key]) {
         merged[key] = {

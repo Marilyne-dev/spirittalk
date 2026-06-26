@@ -64,6 +64,29 @@ class AuthController extends Controller {
     }
 
 
+    public function users(Request $request) {
+        $currentUser = $request->user();
+        $search = trim((string) $request->query('search', ''));
+
+        $users = User::query()
+            ->whereKeyNot($currentUser->id)
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($subQuery) use ($search) {
+                    $subQuery
+                        ->where('name', 'like', $search . '%')
+                        ->orWhere('username', 'like', $search . '%')
+                        ->orWhere('email', 'like', $search . '%')
+                        ->orWhere('name', 'like', '% ' . $search . '%');
+                });
+            })
+            ->orderByRaw('CASE WHEN name LIKE ? THEN 0 WHEN username LIKE ? THEN 1 ELSE 2 END', [$search . '%', $search . '%'])
+            ->orderBy('name')
+            ->limit(30)
+            ->get(['id', 'name', 'username', 'email', 'religion', 'avatar', 'level', 'xp_points', 'profession', 'created_at']);
+
+        return response()->json(['users' => $users], 200);
+    }
+
     public function logout(Request $request) {
         $request->user()->currentAccessToken()->delete();
         return response()->json(['message' => 'Déconnexion réussie']);
