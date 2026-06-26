@@ -1,0 +1,6 @@
+{
+  "name": "SpiritTalk",
+  "description": "Un compagnon spirituel moderne et élégant pour explorer la Bible, le Coran et d'autres textes sacrés avec des quiz, des plans de lecture et de la guidance IA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

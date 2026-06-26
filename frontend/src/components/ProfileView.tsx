@@ -1,0 +1,319 @@
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Award, Flame, Bookmark, PenSquare, Trash2, Copy, Check, Calendar, Plus, MessageSquare, BookOpen, Clock, X } from 'lucide-react';
+import { Bookmark as BookmarkType, Note } from '../types';
+
+interface ProfileViewProps {
+  xp: number;
+  streak: number;
+  bookmarks: BookmarkType[];
+  notes: Note[];
+  onCheckIn: () => void;
+  onRemoveBookmark: (id: string) => void;
+  onAddNote: (note: Omit<Note, 'id' | 'date'>) => void;
+  onDeleteNote: (id: string) => void;
+  onNavigateToChatWithQuery: (initialPrompt: string) => void;
+  hasCheckedInToday: boolean;
+}
+
+export default function ProfileView({
+  xp,
+  streak,
+  bookmarks,
+  notes,
+  onCheckIn,
+  onRemoveBookmark,
+  onAddNote,
+  onDeleteNote,
+  onNavigateToChatWithQuery,
+  hasCheckedInToday
+}: ProfileViewProps) {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  
+  // Note creation form state
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [noteTitle, setNoteTitle] = useState("");
+  const [noteContent, setNoteContent] = useState("");
+  const [noteCategory, setNoteCategory] = useState<'Silence' | 'Gratitude' | 'Prière' | 'Méditation' | 'Autre'>('Silence');
+
+  const handleCopyBookmark = (bm: BookmarkType) => {
+    navigator.clipboard.writeText(`"${bm.verseText}" — ${bm.reference}`);
+    setCopiedId(bm.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!noteTitle.trim() || !noteContent.trim()) return;
+    
+    onAddNote({
+      title: noteTitle.trim(),
+      content: noteContent.trim(),
+      category: noteCategory
+    });
+    
+    // reset form
+    setNoteTitle("");
+    setNoteContent("");
+    setNoteCategory("Silence");
+    setShowAddForm(false);
+  };
+
+  return (
+    <div className="space-y-8 animate-fade-in pb-12">
+      
+      {/* Profile Overview Banner */}
+      <section className="bg-white dark:bg-charcoal-card rounded-2xl p-6 border border-cream-darker dark:border-charcoal-light/10 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6 text-center divide-y md:divide-y-0 md:divide-x divide-cream-darker dark:divide-charcoal-light/15">
+        <div className="space-y-1.5 py-2">
+          <p className="text-xs text-slate-400 dark:text-cream-base/50 uppercase tracking-widest font-semibold">Titre Spirituel</p>
+          <div className="flex items-center justify-center gap-2 text-emerald-medium dark:text-gold-bright">
+            <Award className="w-5 h-5" />
+            <h4 className="font-serif text-lg font-bold">Explorateur Sage</h4>
+          </div>
+          <p className="text-[11px] text-slate-400">Progression : 88% des quiz</p>
+        </div>
+
+        <div className="space-y-1.5 py-2">
+          <p className="text-xs text-slate-400 dark:text-cream-base/50 uppercase tracking-widest font-semibold">Énergie d'Étude</p>
+          <p className="font-serif text-2xl font-bold text-emerald-deep dark:text-cream-base">{xp} XP</p>
+          <p className="text-[11px] text-slate-400">Prochain niveau à 1500 XP</p>
+        </div>
+
+        <div className="space-y-2 py-2">
+          <p className="text-xs text-slate-400 dark:text-cream-base/50 uppercase tracking-widest font-semibold">Présence</p>
+          <div className="flex items-center justify-center gap-1.5 text-gold-deep dark:text-gold-bright">
+            <Flame className="w-5 h-5 text-orange-500 animate-pulse" />
+            <h4 className="font-serif text-lg font-bold">{streak} jours d'affilée</h4>
+          </div>
+          
+          <button
+            onClick={onCheckIn}
+            disabled={hasCheckedInToday}
+            className={`px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider transition-all border ${
+              hasCheckedInToday
+                ? "bg-green-500/10 text-green-600 border-green-500/20"
+                : "bg-gold-bright text-gold-deep hover:bg-gold-muted border-gold-muted/40 active:scale-95"
+            }`}
+          >
+            {hasCheckedInToday ? "✓ Présence Enregistrée" : "S'enregistrer aujourd'hui (+50 XP)"}
+          </button>
+        </div>
+      </section>
+
+      {/* Asymmetric Split: Bookmarks (Mes Favoris) & Journal (Mes Notes) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* Bookmarks Column (Mes Favoris) */}
+        <section className="lg:col-span-6 space-y-4">
+          <div className="flex justify-between items-center px-1">
+            <h3 className="font-serif text-lg font-bold text-emerald-deep dark:text-cream-base uppercase tracking-wider flex items-center gap-2">
+              <Bookmark className="w-4 h-4 text-gold-deep" />
+              <span>Mes Favoris ({bookmarks.length})</span>
+            </h3>
+          </div>
+
+          <div className="space-y-4">
+            {bookmarks.length > 0 ? (
+              bookmarks.map((bm) => {
+                const isCopied = copiedId === bm.id;
+                return (
+                  <div
+                    key={bm.id}
+                    className="p-5 bg-white dark:bg-charcoal-card rounded-xl border border-cream-darker dark:border-charcoal-light/10 shadow-sm relative group space-y-3 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="px-2.5 py-0.5 rounded-full bg-[#759486]/10 text-emerald-medium dark:text-emerald-fixed text-[9px] uppercase font-bold tracking-wider">
+                        {bm.source}
+                      </span>
+                      
+                      <div className="flex gap-1 opacity-100 lg:opacity-30 lg:group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => handleCopyBookmark(bm)}
+                          className="p-1.5 text-slate-400 hover:text-emerald-medium dark:hover:text-gold-bright transition-colors"
+                          title="Copier le verset"
+                        >
+                          {isCopied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                        
+                        <button
+                          onClick={() => onNavigateToChatWithQuery(`Donne-moi une analyse spirituelle complète et des conseils de vie basés sur ce verset : "${bm.verseText}" (${bm.reference})`)}
+                          className="p-1.5 text-slate-400 hover:text-emerald-medium transition-colors"
+                          title="Demander guidance sur ce verset"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => onRemoveBookmark(bm.id)}
+                          className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                          title="Retirer des favoris"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <blockquote className="italic font-serif text-sm text-slate-700 dark:text-cream-base/90 leading-relaxed scripture-quote border-gold-deep">
+                      "{bm.verseText}"
+                    </blockquote>
+                    
+                    <div className="text-right text-[11px] font-mono uppercase tracking-widest text-slate-400 font-bold">
+                      — {bm.reference}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="text-center py-12 bg-white dark:bg-charcoal-card border border-cream-darker dark:border-charcoal-light/10 rounded-2xl">
+                <Bookmark className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm font-serif font-semibold text-slate-400">Aucun favori enregistré</p>
+                <p className="text-[10px] text-slate-400 max-w-xs mx-auto mt-0.5">Explorez des écritures et sauvegardez vos inspirations quotidiennes.</p>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Reflection Notes Column (Mes Notes / Journal) */}
+        <section className="lg:col-span-6 space-y-4">
+          <div className="flex justify-between items-center px-1">
+            <h3 className="font-serif text-lg font-bold text-emerald-deep dark:text-cream-base uppercase tracking-wider flex items-center gap-2">
+              <PenSquare className="w-4 h-4 text-emerald-medium" />
+              <span>Mon Journal de Réflexions ({notes.length})</span>
+            </h3>
+            
+            <button
+              onClick={() => setShowAddForm(prev => !prev)}
+              className="text-xs py-1.5 px-3 bg-emerald-medium text-white rounded-lg flex items-center gap-1 font-semibold hover:bg-emerald-deep transition-colors"
+            >
+              {showAddForm ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+              <span>{showAddForm ? "Fermer" : "Nouvelle Note"}</span>
+            </button>
+          </div>
+
+          <AnimatePresence>
+            {showAddForm && (
+              <motion.form
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                onSubmit={handleFormSubmit}
+                className="bg-emerald-medium/5 dark:bg-charcoal-card/45 p-5 rounded-2xl border border-emerald-medium/15 space-y-4 overflow-hidden"
+              >
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold tracking-wider text-emerald-light dark:text-emerald-fixed block">
+                    Catégorie
+                  </label>
+                  <select
+                    value={noteCategory}
+                    onChange={(e) => setNoteCategory(e.target.value as any)}
+                    className="w-full bg-white dark:bg-charcoal-dark border border-cream-darker dark:border-charcoal-light/15 rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-emerald-medium text-slate-700 dark:text-cream-base"
+                  >
+                    <option value="Silence">Silence</option>
+                    <option value="Gratitude">Gratitude</option>
+                    <option value="Prière">Prière</option>
+                    <option value="Méditation">Méditation</option>
+                    <option value="Autre">Autre</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold tracking-wider text-emerald-light dark:text-emerald-fixed block">
+                    Titre de la réflexion
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={noteTitle}
+                    onChange={(e) => setNoteTitle(e.target.value)}
+                    placeholder="ex: Méditation sur le Silence"
+                    className="w-full bg-white dark:bg-charcoal-dark border border-cream-darker dark:border-charcoal-light/15 rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-emerald-medium text-slate-700 dark:text-cream-base"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold tracking-wider text-emerald-light dark:text-emerald-fixed block">
+                    Votre pensée spirituelle
+                  </label>
+                  <textarea
+                    required
+                    rows={3}
+                    value={noteContent}
+                    onChange={(e) => setNoteContent(e.target.value)}
+                    placeholder="Qu'avez-vous ressenti ou appris aujourd'hui ?"
+                    className="w-full bg-white dark:bg-charcoal-dark border border-cream-darker dark:border-charcoal-light/15 rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-emerald-medium text-slate-700 dark:text-cream-base"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2 bg-emerald-medium text-white rounded-lg text-xs font-semibold hover:bg-emerald-deep active:scale-95 transition-all shadow-sm"
+                >
+                  Enregistrer ma Note
+                </button>
+              </motion.form>
+            )}
+          </AnimatePresence>
+
+          <div className="space-y-4">
+            {notes.length > 0 ? (
+              notes.map((note) => (
+                <div
+                  key={note.id}
+                  className="p-5 rounded-xl border border-cream-darker dark:border-charcoal-light/10 hover:shadow-md transition-shadow bg-white dark:bg-charcoal-card space-y-3 relative group"
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 bg-emerald-medium/10 text-emerald-medium dark:text-emerald-fixed text-[9px] font-bold uppercase rounded-md">
+                          {note.category}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium flex items-center gap-0.5">
+                          <Calendar className="w-2.5 h-2.5" />
+                          {note.date}
+                        </span>
+                      </div>
+                      
+                      <h5 className="font-serif text-base font-bold text-emerald-deep dark:text-cream-base">
+                        {note.title}
+                      </h5>
+                    </div>
+                    
+                    <button
+                      onClick={() => onDeleteNote(note.id)}
+                      className="p-1 text-slate-300 hover:text-red-500 rounded-lg transition-colors opacity-100 lg:opacity-30 lg:group-hover:opacity-100"
+                      title="Supprimer la note"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  
+                  <p className="text-xs text-slate-600 dark:text-cream-base/80 leading-relaxed font-sans whitespace-pre-line">
+                    {note.content}
+                  </p>
+
+                  <div className="pt-2 border-t border-cream-darker dark:border-charcoal-light/10 flex justify-end">
+                    <button
+                      onClick={() => onNavigateToChatWithQuery(`Analyse spirituellement et conseille-moi sur cette réflexion tirée de mon journal : "${note.content}"`)}
+                      className="text-[10px] font-semibold text-emerald-medium dark:text-gold-bright hover:underline flex items-center gap-1"
+                    >
+                      <span>Consulter Sagesse Divine sur cette pensée</span>
+                      <MessageSquare className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-12 bg-white dark:bg-charcoal-card border border-cream-darker dark:border-charcoal-light/10 rounded-2xl">
+                <PenSquare className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm font-serif font-semibold text-slate-400">Aucune note de réflexion</p>
+                <p className="text-[10px] text-slate-400 max-w-xs mx-auto mt-0.5">Prenez un instant pour noter vos prières et méditations quotidiennes.</p>
+              </div>
+            )}
+          </div>
+        </section>
+
+      </div>
+
+    </div>
+  );
+}
