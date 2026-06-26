@@ -35,22 +35,38 @@ export const apiService = {
       const data = await response.json();
       if (data.token) {
         localStorage.setItem('spirittalk_token', data.token);
+        // Backup to local simulated users list
+        const currentSimulatedStr = localStorage.getItem('spirittalk_simulated_users');
+        const currentSimulated = currentSimulatedStr ? JSON.parse(currentSimulatedStr) : [];
+        const filtered = currentSimulated.filter((u: any) => u.email.toLowerCase() !== data.user.email.toLowerCase());
+        filtered.push(data.user);
+        localStorage.setItem('spirittalk_simulated_users', JSON.stringify(filtered));
         localStorage.setItem('spirittalk_user', JSON.stringify(data.user));
       }
       return data;
     } catch (error) {
       console.warn("Laravel Backend Login failed, using local simulation", error);
-      // Simulate login for development/preview
-      const mockUser = {
-        id: 1,
-        name: 'Seeker',
-        username: 'seeker',
+      // Try to find the user in our local simulated registry!
+      const currentSimulatedStr = localStorage.getItem('spirittalk_simulated_users');
+      const currentSimulated = currentSimulatedStr ? JSON.parse(currentSimulatedStr) : [];
+      const existingUser = currentSimulated.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
+      
+      const mockUser = existingUser || {
+        id: Date.now(),
+        name: email.split('@')[0], // Use email prefix instead of hardcoding "Seeker"!
+        username: email.split('@')[0].toLowerCase().replace(/\s+/g, ''),
         email: email,
         religion: 'Mixte',
         avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200',
         level: 'Explorateur Sage',
         xp_points: 1200
       };
+
+      if (!existingUser) {
+        currentSimulated.push(mockUser);
+        localStorage.setItem('spirittalk_simulated_users', JSON.stringify(currentSimulated));
+      }
+
       localStorage.setItem('spirittalk_token', 'mock_token_123456');
       localStorage.setItem('spirittalk_user', JSON.stringify(mockUser));
       return { token: 'mock_token_123456', user: mockUser };
@@ -68,6 +84,12 @@ export const apiService = {
       const data = await response.json();
       if (data.token) {
         localStorage.setItem('spirittalk_token', data.token);
+        // Backup to local simulated users list
+        const currentSimulatedStr = localStorage.getItem('spirittalk_simulated_users');
+        const currentSimulated = currentSimulatedStr ? JSON.parse(currentSimulatedStr) : [];
+        const filtered = currentSimulated.filter((u: any) => u.email.toLowerCase() !== data.user.email.toLowerCase());
+        filtered.push(data.user);
+        localStorage.setItem('spirittalk_simulated_users', JSON.stringify(filtered));
         localStorage.setItem('spirittalk_user', JSON.stringify(data.user));
       }
       return data;
@@ -87,6 +109,15 @@ export const apiService = {
         level: 'Explorateur',
         xp_points: 0
       };
+      
+      // Save to local simulated users registry!
+      const currentSimulatedStr = localStorage.getItem('spirittalk_simulated_users');
+      const currentSimulated = currentSimulatedStr ? JSON.parse(currentSimulatedStr) : [];
+      // Prevent duplicates
+      const filtered = currentSimulated.filter((u: any) => u.email.toLowerCase() !== email.toLowerCase() && u.username.toLowerCase() !== username.toLowerCase());
+      filtered.push(mockUser);
+      localStorage.setItem('spirittalk_simulated_users', JSON.stringify(filtered));
+
       localStorage.setItem('spirittalk_token', 'mock_token_123456');
       localStorage.setItem('spirittalk_user', JSON.stringify(mockUser));
       return { token: 'mock_token_123456', user: mockUser };
@@ -94,6 +125,30 @@ export const apiService = {
   },
 
   async updateProfile(updates: { name?: string; email?: string; religion?: 'Chrétienne' | 'Musulmane' | 'Mixte'; avatar?: string }) {
+    // 1. Update localStorage spirittalk_user
+    const savedUserStr = localStorage.getItem('spirittalk_user');
+    const current = savedUserStr ? JSON.parse(savedUserStr) : null;
+    if (current) {
+      const updatedUser = { ...current, ...updates };
+      localStorage.setItem('spirittalk_user', JSON.stringify(updatedUser));
+
+      // 2. Update spirittalk_simulated_users registry so it's persistent across logout/login!
+      const currentSimulatedStr = localStorage.getItem('spirittalk_simulated_users');
+      const currentSimulated = currentSimulatedStr ? JSON.parse(currentSimulatedStr) : [];
+      const updatedList = currentSimulated.map((u: any) => {
+        if (u.email.toLowerCase() === current.email.toLowerCase() || u.id?.toString() === current.id?.toString()) {
+          return { ...u, ...updates };
+        }
+        return u;
+      });
+      // Ensure if not in list, we add it
+      const exists = currentSimulated.some((u: any) => u.email.toLowerCase() === current.email.toLowerCase() || u.id?.toString() === current.id?.toString());
+      if (!exists) {
+        updatedList.push(updatedUser);
+      }
+      localStorage.setItem('spirittalk_simulated_users', JSON.stringify(updatedList));
+    }
+
     try {
       const response = await fetch(`${API_BASE_URL}/user/update`, {
         method: 'POST',
@@ -412,6 +467,10 @@ export const apiService = {
   },
 
   async getRegisteredUsers(): Promise<any[]> {
+    const localUsersStr = localStorage.getItem('spirittalk_simulated_users');
+    const localUsers = localUsersStr ? JSON.parse(localUsersStr) : [];
+    
+    let backendUsers: any[] = [];
     const endpoints = [`${API_BASE_URL}/users`, `${API_BASE_URL}/members`, `${API_BASE_URL}/all-users`];
     for (const url of endpoints) {
       try {
@@ -422,9 +481,11 @@ export const apiService = {
         if (response.ok) {
           const data = await response.json();
           if (Array.isArray(data)) {
-            return data;
+            backendUsers = data;
+            break;
           } else if (data && Array.isArray(data.users)) {
-            return data.users;
+            backendUsers = data.users;
+            break;
           }
         }
       } catch (err) {
@@ -432,36 +493,71 @@ export const apiService = {
       }
     }
     
-    // Fallback: harvest users from public inspirations!
-    try {
-      const response = await fetch(`${API_BASE_URL}/inspirations`, {
-        method: 'GET',
-        headers: getHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data)) {
-          const harvested: Record<string, any> = {};
-          data.forEach((item: any) => {
-            if (item.user && item.user.id) {
-              harvested[item.user.id] = {
-                id: item.user.id.toString(),
-                name: item.user.name,
-                username: item.user.username,
-                avatar: item.user.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
-                religion: item.user.religion || 'Mixte',
-                profession: item.user.profession || "Fidèle de la Communauté",
-                isOnline: Math.random() > 0.4
-              };
-            }
-          });
-          return Object.values(harvested);
+    // If backend failed/is empty, try to harvest users from public inspirations
+    if (backendUsers.length === 0) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/inspirations`, {
+          method: 'GET',
+          headers: getHeaders()
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (Array.isArray(data)) {
+            const harvested: Record<string, any> = {};
+            data.forEach((item: any) => {
+              if (item.user && item.user.id) {
+                harvested[item.user.id] = {
+                  id: item.user.id.toString(),
+                  name: item.user.name,
+                  username: item.user.username,
+                  avatar: item.user.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
+                  religion: item.user.religion || 'Mixte',
+                  profession: item.user.profession || "Fidèle de la Communauté",
+                  isOnline: Math.random() > 0.4
+                };
+              }
+            });
+            backendUsers = Object.values(harvested);
+          }
         }
+      } catch (err) {
+        console.warn("Failed to harvest users from inspirations", err);
       }
-    } catch (err) {
-      console.warn("Failed to harvest users from inspirations", err);
     }
     
-    return [];
+    // Merge backendUsers and localUsers. Prefer backend version if ID matches, but keep all unique ones
+    const merged: Record<string, any> = {};
+    
+    backendUsers.forEach((u: any) => {
+      const key = (u.email || u.username || u.id?.toString() || '').toLowerCase();
+      if (key) {
+        merged[key] = {
+          id: u.id?.toString() || u.username || 'user',
+          name: u.name,
+          username: u.username,
+          avatar: u.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
+          religion: u.religion || 'Mixte',
+          profession: u.profession || "Fidèle de la Communauté",
+          isOnline: u.isOnline !== undefined ? u.isOnline : (Math.random() > 0.4)
+        };
+      }
+    });
+
+    localUsers.forEach((u: any) => {
+      const key = (u.email || u.username || u.id?.toString() || '').toLowerCase();
+      if (key && !merged[key]) {
+        merged[key] = {
+          id: u.id?.toString() || u.username || 'user',
+          name: u.name,
+          username: u.username,
+          avatar: u.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
+          religion: u.religion || 'Mixte',
+          profession: u.profession || "Fidèle de la Communauté",
+          isOnline: u.isOnline !== undefined ? u.isOnline : (Math.random() > 0.4)
+        };
+      }
+    });
+
+    return Object.values(merged);
   }
 };

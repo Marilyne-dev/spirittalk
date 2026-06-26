@@ -359,12 +359,189 @@ export default function App() {
     }
   }, [darkMode]);
 
-  // Initialize Pusher real-time synchronization
+  // Initialize Real-time synchronization (native Server-Sent Events stream + Pusher fallback)
   useEffect(() => {
     if (!user) return;
 
+    // Register this active user session on the local shared server for live multi-user visibility
+    const registerOnLocalServer = async () => {
+      try {
+        await fetch('/api/users/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: user.id?.toString() || user.username || 'user',
+            name: user.name,
+            username: user.username,
+            email: user.email,
+            religion: user.religion || 'Mixte',
+            avatar: user.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
+            profession: user.profession || "Fidèle de la Communauté",
+            isOnline: true
+          })
+        });
+      } catch (err) {
+        console.warn("Could not register session on local real-time server", err);
+      }
+    };
+    registerOnLocalServer();
+
+    // Establish SSE event connection
+    const eventSource = new EventSource('/api/chat/stream');
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'init') {
+          // 1. Recover shared historical direct messages
+          if (data.messages && data.messages.length > 0) {
+            setDirectMessages(prev => {
+              const combined = [...prev];
+              data.messages.forEach((newMsg: any) => {
+                const myKey = (user.email || user.username || user.id?.toString() || '').toLowerCase();
+                const mappedSenderId = (newMsg.senderId?.toLowerCase() === myKey) ? 'me' : newMsg.senderId;
+                const mappedRecipientId = (newMsg.recipientId?.toLowerCase() === myKey) ? 'me' : newMsg.recipientId;
+
+                const isRelevant = (mappedSenderId === 'me' || mappedRecipientId === 'me');
+                if (!isRelevant) return;
+
+                const exists = combined.some(m => m.id === newMsg.id);
+                if (!exists) {
+                  combined.push({
+                    id: newMsg.id,
+                    senderId: mappedSenderId,
+                    recipientId: mappedRecipientId,
+                    text: newMsg.text,
+                    images: newMsg.images,
+                    audioUrl: newMsg.audioUrl,
+                    audioDuration: newMsg.audioDuration,
+                    timestamp: newMsg.timestamp
+                  });
+                }
+              });
+              return combined;
+            });
+          }
+
+          // 2. Discover and merge active online users
+          if (data.users && data.users.length > 0) {
+            setFriends(prev => {
+              const updated = [...prev];
+              data.users.forEach((u: any) => {
+                if (u.email.toLowerCase() === user.email.toLowerCase() || u.username.toLowerCase() === user.username.toLowerCase()) return;
+                
+                const existsIdx = updated.findIndex(f => f.email?.toLowerCase() === u.email.toLowerCase() || f.username.toLowerCase() === u.username.toLowerCase() || f.id?.toString() === u.id?.toString());
+                const stdUser = {
+                  id: u.id || u.username,
+                  name: u.name,
+                  username: u.username,
+                  email: u.email,
+                  avatar: u.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
+                  religion: u.religion || 'Mixte',
+                  profession: u.profession || "Fidèle de la Communauté",
+                  status: existsIdx >= 0 ? (updated[existsIdx].status === 'none' ? 'accepted' : updated[existsIdx].status) : 'accepted',
+                  isOnline: true
+                };
+                if (existsIdx >= 0) {
+                  updated[existsIdx] = {
+                    ...updated[existsIdx],
+                    ...stdUser
+                  };
+                } else {
+                  updated.push(stdUser);
+                }
+              });
+              return updated;
+            });
+          }
+        } else if (data.type === 'message') {
+          const newMsg = data.message;
+          const myKey = (user.email || user.username || user.id?.toString() || '').toLowerCase();
+          const mappedSenderId = (newMsg.senderId?.toLowerCase() === myKey) ? 'me' : newMsg.senderId;
+          const mappedRecipientId = (newMsg.recipientId?.toLowerCase() === myKey) ? 'me' : newMsg.recipientId;
+
+          const isRelevant = (mappedSenderId === 'me' || mappedRecipientId === 'me');
+          if (!isRelevant) return;
+
+          setDirectMessages(prev => {
+            const exists = prev.some(m => m.id === newMsg.id);
+            if (exists) return prev;
+            return [...prev, {
+              id: newMsg.id,
+              senderId: mappedSenderId,
+              recipientId: mappedRecipientId,
+              text: newMsg.text,
+              images: newMsg.images,
+              audioUrl: newMsg.audioUrl,
+              audioDuration: newMsg.audioDuration,
+              timestamp: newMsg.timestamp
+            }];
+          });
+
+          // Play receiving bell sound and spawn notification
+          if (mappedSenderId !== 'me') {
+            playPusherPing();
+            setFriends(currentFriends => {
+              const senderFriend = currentFriends.find(f => f.id === mappedSenderId || f.username?.toLowerCase() === mappedSenderId.toLowerCase() || f.email?.toLowerCase() === mappedSenderId.toLowerCase());
+              const senderName = senderFriend ? senderFriend.name : 'Un fidèle';
+              const msgPreview = newMsg.text || (newMsg.audioUrl ? "Note vocale 🎵" : "Image 🖼️");
+              const newNotif: SpiritNotification = {
+                id: `notif_msg_${Date.now()}`,
+                title: `Nouveau message de ${senderName}`,
+                description: msgPreview.substring(0, 50) + (msgPreview.length > 50 ? "..." : ""),
+                time: "À l'instant",
+                isRead: false,
+                type: 'message'
+              };
+              setNotifications(prev => [newNotif, ...prev]);
+              return currentFriends;
+            });
+          }
+        } else if (data.type === 'users') {
+          if (data.users && data.users.length > 0) {
+            setFriends(prev => {
+              const updated = [...prev];
+              data.users.forEach((u: any) => {
+                if (u.email.toLowerCase() === user.email.toLowerCase() || u.username.toLowerCase() === user.username.toLowerCase()) return;
+                
+                const existsIdx = updated.findIndex(f => f.email?.toLowerCase() === u.email.toLowerCase() || f.username.toLowerCase() === u.username.toLowerCase() || f.id?.toString() === u.id?.toString());
+                const stdUser = {
+                  id: u.id || u.username,
+                  name: u.name,
+                  username: u.username,
+                  email: u.email,
+                  avatar: u.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
+                  religion: u.religion || 'Mixte',
+                  profession: u.profession || "Fidèle de la Communauté",
+                  status: existsIdx >= 0 ? (updated[existsIdx].status === 'none' ? 'accepted' : updated[existsIdx].status) : 'accepted',
+                  isOnline: true
+                };
+                if (existsIdx >= 0) {
+                  updated[existsIdx] = {
+                    ...updated[existsIdx],
+                    ...stdUser
+                  };
+                } else {
+                  updated.push(stdUser);
+                }
+              });
+              return updated;
+            });
+          }
+        } else if (data.type === 'typing') {
+          const { userId, recipientId, isTyping } = data;
+          const myKey = (user.email || user.username || user.id?.toString() || '').toLowerCase();
+          if (recipientId?.toLowerCase() === myKey) {
+            setFriends(prev => prev.map(f => (f.id === userId || f.username?.toLowerCase() === userId.toLowerCase() || f.email?.toLowerCase() === userId.toLowerCase()) ? { ...f, isTyping } : f));
+          }
+        }
+      } catch (err) {
+        console.warn("Error parsing real-time message stream payload", err);
+      }
+    };
+
+    // Also run original Pusher triggers as a hybrid redundancy layer
     const pusher = pusherService.initialize(
-      // onNewMessage callback
       (newMsg) => {
         if (newMsg.senderId !== 'me') {
           setDirectMessages(prev => {
@@ -381,24 +558,8 @@ export default function App() {
               timestamp: newMsg.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             }];
           });
-
-          // Also trigger a notification for new messages
-          const senderFriend = friends.find(f => f.id === newMsg.senderId);
-          if (senderFriend) {
-            const msgPreview = newMsg.text || (newMsg.audioUrl ? "Note vocale 🎵" : "Image 🖼️");
-            const newNotif: SpiritNotification = {
-              id: `notif_msg_${Date.now()}`,
-              title: `Message de ${senderFriend.name}`,
-              description: msgPreview.substring(0, 50) + (msgPreview.length > 50 ? "..." : ""),
-              time: "À l'instant",
-              isRead: false,
-              type: 'message'
-            };
-            setNotifications(prev => [newNotif, ...prev]);
-          }
         }
       },
-      // onNewPost callback
       (newPost) => {
         if (newPost.username !== user.username) {
           setPosts(prev => {
@@ -408,16 +569,14 @@ export default function App() {
           });
         }
       },
-      // onFriendTyping callback
       (friendId, isTyping) => {
         setFriends(prev => prev.map(f => f.id === friendId ? { ...f, isTyping } : f));
       }
     );
 
     return () => {
-      if (pusher) {
-        pusher.disconnect();
-      }
+      eventSource.close();
+      if (pusher) pusher.disconnect();
     };
   }, [user, friends]);
 
@@ -822,24 +981,79 @@ export default function App() {
     setFriends(prev => prev.filter(f => f.id !== friendId));
   };
 
-  const handleSendDirectMessage = (recipientId: string, text?: string, images?: string[], audioUrl?: string, audioDuration?: string) => {
+  const handleSendDirectMessage = async (recipientId: string, text?: string, images?: string[], audioUrl?: string, audioDuration?: string) => {
+    const newMsgId = `dm_msg_${Date.now()}`;
+    const timestampStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
     const newMsg: DirectMessage = {
-      id: `dm_msg_${Date.now()}`,
+      id: newMsgId,
       senderId: 'me',
       recipientId,
       text,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: timestampStr,
       images,
       audioUrl,
       audioDuration
     };
     setDirectMessages(prev => [...prev, newMsg]);
+
+    try {
+      const targetFriend = friends.find(f => f.id === recipientId);
+      const targetKey = targetFriend?.email || targetFriend?.username || recipientId;
+
+      await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: newMsgId,
+          senderId: user.email || user.username || user.id?.toString(),
+          recipientId: targetKey,
+          text,
+          images,
+          audioUrl,
+          audioDuration,
+          timestamp: timestampStr
+        })
+      });
+    } catch (err) {
+      console.warn("Failed to transmit message through server", err);
+    }
   };
 
-  const handleSimulateTyping = (recipientId: string) => {
+  const handleSimulateTyping = async (recipientId: string) => {
+    try {
+      const targetFriend = friends.find(f => f.id === recipientId);
+      const targetKey = targetFriend?.email || targetFriend?.username || recipientId;
+
+      await fetch('/api/chat/typing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.email || user.username || user.id?.toString(),
+          recipientId: targetKey,
+          isTyping: true
+        })
+      });
+
+      setTimeout(async () => {
+        try {
+          await fetch('/api/chat/typing', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: user.email || user.username || user.id?.toString(),
+              recipientId: targetKey,
+              isTyping: false
+            })
+          });
+        } catch (e) {}
+      }, 3000);
+    } catch (err) {}
+
     const activeFriend = friends.find(f => f.id === recipientId);
     if (!activeFriend) return;
 
+    // Simulate standard Theological AI fallback (only run if no other real users are actively typing/sending)
     setTimeout(() => {
       setFriends(prev => prev.map(f => f.id === recipientId ? { ...f, isTyping: true } : f));
       

@@ -126,6 +126,117 @@ async function startServer() {
     }
   });
 
+  // --- SERVER-SIDE IN-MEMORY REAL-TIME SYSTEM (SSE) ---
+  interface ChatMessagePayload {
+    id: string;
+    senderId: string;
+    recipientId: string;
+    text?: string;
+    images?: string[];
+    audioUrl?: string;
+    audioDuration?: string;
+    timestamp: string;
+  }
+
+  interface UserPayload {
+    id: string;
+    name: string;
+    username: string;
+    email: string;
+    religion: string;
+    avatar: string;
+    profession?: string;
+    isOnline: boolean;
+  }
+
+  // Shared state inside the Node.js container
+  let activeClients: express.Response[] = [];
+  let sharedMessages: ChatMessagePayload[] = [];
+  const sharedUsers: Record<string, UserPayload> = {};
+
+  // Server-Sent Events (SSE) Stream Endpoint
+  app.get("/api/chat/stream", (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    activeClients.push(res);
+    console.log(`🔌 [SSE] Client connected. Total active: ${activeClients.length}`);
+
+    // Send initial greeting, users list, and historical messages
+    res.write(`data: ${JSON.stringify({ type: 'init', messages: sharedMessages, users: Object.values(sharedUsers) })}\n\n`);
+
+    req.on("close", () => {
+      activeClients = activeClients.filter(client => client !== res);
+      console.log(`🔌 [SSE] Client disconnected. Total active: ${activeClients.length}`);
+    });
+  });
+
+  // Helper to broadcast to all SSE connected browsers
+  function broadcastSSE(data: any) {
+    const payload = `data: ${JSON.stringify(data)}\n\n`;
+    activeClients.forEach((client) => {
+      try {
+        client.write(payload);
+      } catch (e) {
+        console.warn("SSE Write Error", e);
+      }
+    });
+  }
+
+  // Register online users on Node.js side
+  app.post("/api/users/register", (req, res) => {
+    const user = req.body;
+    if (user && user.email) {
+      const key = user.email.toLowerCase();
+      sharedUsers[key] = {
+        ...user,
+        isOnline: true
+      };
+      broadcastSSE({ type: 'users', users: Object.values(sharedUsers) });
+    }
+    res.json({ success: true, users: Object.values(sharedUsers) });
+  });
+
+  // Get online users
+  app.get("/api/users/list", (req, res) => {
+    res.json(Object.values(sharedUsers));
+  });
+
+  // Transmit real-time message
+  app.post("/api/chat/send", (req, res) => {
+    const msg = req.body;
+    if (msg && msg.senderId && msg.recipientId) {
+      const fullMsg: ChatMessagePayload = {
+        id: msg.id || `dm_msg_${Date.now()}`,
+        senderId: msg.senderId,
+        recipientId: msg.recipientId,
+        text: msg.text,
+        images: msg.images,
+        audioUrl: msg.audioUrl,
+        audioDuration: msg.audioDuration,
+        timestamp: msg.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      sharedMessages.push(fullMsg);
+      if (sharedMessages.length > 500) {
+        sharedMessages = sharedMessages.slice(-500);
+      }
+      broadcastSSE({ type: 'message', message: fullMsg });
+      return res.json({ success: true, message: fullMsg });
+    }
+    res.status(400).json({ error: "Invalid message payload" });
+  });
+
+  // Broadcast typing state
+  app.post("/api/chat/typing", (req, res) => {
+    const { userId, recipientId, isTyping } = req.body;
+    if (userId) {
+      broadcastSSE({ type: 'typing', userId, recipientId, isTyping });
+    }
+    res.json({ success: true });
+  });
+
   // API proxy route to bypass client CORS restrictions for bible-api.com
   app.get("/api/bible", async (req, res) => {
     try {
