@@ -620,6 +620,7 @@ export default function App() {
     fetchAndMergeUsers();
   }, [user]);
 
+  // exemple
   const handleSearchMembers = useCallback(async (query: string) => {
     if (!user) return;
 
