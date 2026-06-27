@@ -73,13 +73,12 @@ class AuthController extends Controller {
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($subQuery) use ($search) {
                     $subQuery
-                        ->where('name', 'like', $search . '%')
-                        ->orWhere('username', 'like', $search . '%')
-                        ->orWhere('email', 'like', $search . '%')
-                        ->orWhere('name', 'like', '% ' . $search . '%');
+                        ->where('name', 'like', '%' . $search . '%')
+                        ->orWhere('username', 'like', '%' . $search . '%')
+                        ->orWhere('email', 'like', '%' . $search . '%');
                 });
             })
-            ->orderByRaw('CASE WHEN name LIKE ? THEN 0 WHEN username LIKE ? THEN 1 ELSE 2 END', [$search . '%', $search . '%'])
+            ->orderByRaw('CASE WHEN name LIKE ? THEN 0 WHEN username LIKE ? THEN 1 ELSE 2 END', ['%' . $search . '%', '%' . $search . '%'])
             ->orderBy('name')
             ->limit(30)
             ->get(['id', 'name', 'username', 'email', 'religion', 'avatar', 'level', 'xp_points', 'profession', 'created_at']);

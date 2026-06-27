@@ -45,98 +45,7 @@ const PRE_SEEDED_CHAT: ChatMessage[] = [
   }
 ];
 
-const PRE_SEEDED_FRIENDS: Friend[] = [
-  {
-    id: 'friend_amina',
-    name: "Amina Diop",
-    username: "amina_diop",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200",
-    religion: "Musulmane",
-    profession: "Étudiante en Psychologie",
-    isOnline: true,
-    status: 'accepted'
-  },
-  {
-    id: 'friend_samuel',
-    name: "Samuel Koffi",
-    username: "sam_koffi",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200",
-    religion: "Chrétienne",
-    profession: "Enseignant d'Histoire",
-    isOnline: true,
-    status: 'accepted'
-  },
-  {
-    id: 'friend_jordan',
-    name: "Jordan Mensah",
-    username: "jordan_m",
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200",
-    religion: "Chrétienne",
-    profession: "Infirmier de nuit",
-    isOnline: false,
-    status: 'accepted'
-  },
-  {
-    id: 'friend_fatima',
-    name: "Fatima Sylla",
-    username: "fatima_sy",
-    avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200",
-    religion: "Musulmane",
-    profession: "Architecte",
-    isOnline: false,
-    status: 'pending_received'
-  },
-  {
-    id: 'user_sarah',
-    name: "Sarah Dubois",
-    username: "sarah_d",
-    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200",
-    religion: "Chrétienne",
-    profession: "Médecin Généraliste",
-    isOnline: true,
-    status: 'none'
-  },
-  {
-    id: 'user_bilal',
-    name: "Bilal Mansouri",
-    username: "bilal_m",
-    avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=200",
-    religion: "Musulmane",
-    profession: "Ingénieur Agronome",
-    isOnline: true,
-    status: 'none'
-  },
-  {
-    id: 'user_claire',
-    name: "Claire Laurent",
-    username: "claire_laur",
-    avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200",
-    religion: "Chrétienne",
-    profession: "Journaliste Littéraire",
-    isOnline: false,
-    status: 'none'
-  },
-  {
-    id: 'user_ibrahim',
-    name: "Ibrahim Alami",
-    username: "ibrahim_al",
-    avatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=200",
-    religion: "Musulmane",
-    profession: "Calligraphe d'Art",
-    isOnline: true,
-    status: 'none'
-  },
-  {
-    id: 'user_youssef',
-    name: "Youssef Bensalah",
-    username: "youssef_ben",
-    avatar: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=200",
-    religion: "Musulmane",
-    profession: "Bâtisseur Humanitaire",
-    isOnline: false,
-    status: 'none'
-  }
-];
+
 
 const PRE_SEEDED_POSTS: CommunityPost[] = [
   {
@@ -249,7 +158,9 @@ export default function App() {
 
   const [friends, setFriends] = useState<Friend[]>(() => {
     const saved = localStorage.getItem('spirittalk_friends');
-    return saved ? JSON.parse(saved) : PRE_SEEDED_FRIENDS;
+    const parsed = saved ? JSON.parse(saved) : [];
+    // Filter out demo/mock user IDs
+    return parsed.filter((f: Friend) => f.id && !f.id.toString().startsWith('friend_') && !f.id.toString().startsWith('user_'));
   });
 
   const [directMessages, setDirectMessages] = useState<DirectMessage[]>(() => {
@@ -259,16 +170,7 @@ export default function App() {
 
   const [notifications, setNotifications] = useState<SpiritNotification[]>(() => {
     const saved = localStorage.getItem('spirittalk_notifications');
-    return saved ? JSON.parse(saved) : [
-      {
-        id: 'notif_1',
-        title: "Demande de fraternité reçue",
-        description: "Fatima Sylla souhaite se connecter avec vous.",
-        time: "Il y a 10m",
-        isRead: false,
-        type: 'friend_request'
-      }
-    ];
+    return saved ? JSON.parse(saved) : [];
   });
   
   // Persisted Stats & Data
@@ -615,40 +517,43 @@ export default function App() {
     if (!user) return;
     const fetchAndMergeUsers = async () => {
       try {
-        const backendUsers = await apiService.getRegisteredUsers();
+        const [backendUsers, friendships] = await Promise.all([
+          apiService.getRegisteredUsers(),
+          apiService.getFriendships()
+        ]);
+        
+        // Map friendships by lowercased identity keys
+        const friendshipMap = new Map<string, string>();
+        friendships.forEach((f: any) => {
+          const key = (f.email || f.username || f.id?.toString() || '').toLowerCase();
+          if (key) {
+            friendshipMap.set(key, f.status);
+          }
+        });
+
         if (backendUsers && backendUsers.length > 0) {
-          setFriends(prevFriends => {
-            const updated = [...prevFriends];
-            backendUsers.forEach((bu: any) => {
+          // REMPLACER complètement la liste
+          const friendsList = backendUsers
+            .filter((bu: any) => {
               // Ne pas s'ajouter soi-même
               const isMe = bu.email === user.email || bu.username === user.username || bu.id?.toString() === user.id?.toString() || bu.id_user?.toString() === user.id?.toString();
-              if (isMe) return;
-
-              const buId = bu.id?.toString() || bu.username;
-              const existsIdx = updated.findIndex(f => f.id === buId || f.username === bu.username);
-              
-              const standardized = {
-                id: buId,
+              return !isMe;
+            })
+            .map((bu: any) => {
+              const key = (bu.email || bu.username || bu.id?.toString() || '').toLowerCase();
+              const status = friendshipMap.get(key) || 'none';
+              return {
+                id: bu.id?.toString() || bu.username,
                 name: bu.name,
                 username: bu.username,
                 avatar: bu.avatar || "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200",
                 religion: bu.religion || 'Mixte',
                 profession: bu.profession || "Fidèle de la Communauté",
-                status: existsIdx >= 0 ? updated[existsIdx].status : 'none',
+                status: status,
                 isOnline: bu.isOnline !== undefined ? bu.isOnline : (Math.random() > 0.4),
               };
-              
-              if (existsIdx >= 0) {
-                updated[existsIdx] = {
-                  ...standardized,
-                  status: updated[existsIdx].status
-                };
-              } else {
-                updated.push(standardized);
-              }
             });
-            return updated;
-          });
+          setFriends(friendsList);
         }
       } catch (err) {
         console.warn("Could not fetch and merge registered users", err);
@@ -661,46 +566,72 @@ export default function App() {
     if (!user) return;
 
     try {
-      const backendUsers = await apiService.getRegisteredUsers(query);
-      if (!backendUsers || backendUsers.length === 0) return;
+      const [backendUsers, friendships] = await Promise.all([
+        apiService.getRegisteredUsers(query),
+        apiService.getFriendships()
+      ]);
+      
+      const friendshipMap = new Map<string, string>();
+      friendships.forEach((f: any) => {
+        const key = (f.email || f.username || f.id?.toString() || '').toLowerCase();
+        if (key) {
+          friendshipMap.set(key, f.status);
+        }
+      });
 
-      setFriends(prevFriends => {
-        const updated = [...prevFriends];
-        backendUsers.forEach((bu: any) => {
+      if (!backendUsers || backendUsers.length === 0) {
+        // Si pas de résultats et recherche vide, recharger tous les utilisateurs
+        if (!query.trim()) {
+          const allUsers = await apiService.getRegisteredUsers();
+          const friendsList = (allUsers || [])
+            .filter((bu: any) => {
+              const isMe = bu.email === user.email || bu.username === user.username || bu.id?.toString() === user.id?.toString() || bu.id_user?.toString() === user.id?.toString();
+              return !isMe;
+            })
+            .map((bu: any) => {
+              const key = (bu.email || bu.username || bu.id?.toString() || '').toLowerCase();
+              const status = friendshipMap.get(key) || 'none';
+              return {
+                id: bu.id?.toString() || bu.username,
+                name: bu.name,
+                username: bu.username,
+                avatar: bu.avatar || "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200",
+                religion: bu.religion || 'Mixte',
+                profession: bu.profession || "Fidèle de la Communauté",
+                status: status,
+                isOnline: bu.isOnline !== undefined ? bu.isOnline : (Math.random() > 0.4),
+              };
+            });
+          setFriends(friendsList);
+        } else {
+          setFriends([]); // Vider la liste si aucun résultat de recherche
+        }
+        return;
+      }
+
+      // REMPLACER complètement la liste avec les résultats de recherche
+      const friendsList = backendUsers
+        .filter((bu: any) => {
           const isMe = bu.email === user.email || bu.username === user.username || bu.id?.toString() === user.id?.toString() || bu.id_user?.toString() === user.id?.toString();
-          if (isMe) return;
-
-          const buId = bu.id?.toString() || bu.username;
-          const existsIdx = updated.findIndex(f =>
-            f.id === buId ||
-            f.username === bu.username ||
-            (!!f.email && !!bu.email && f.email.toLowerCase() === bu.email.toLowerCase())
-          );
-
-          const standardized = {
-            id: buId,
+          return !isMe;
+        })
+        .map((bu: any) => {
+          const key = (bu.email || bu.username || bu.id?.toString() || '').toLowerCase();
+          const status = friendshipMap.get(key) || 'none';
+          return {
+            id: bu.id?.toString() || bu.username,
             name: bu.name,
             username: bu.username,
             email: bu.email,
             avatar: bu.avatar || "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200",
             religion: bu.religion || 'Mixte',
-            profession: bu.profession || "Fidele de la Communaute",
-            status: existsIdx >= 0 ? updated[existsIdx].status : 'none',
+            profession: bu.profession || "Fidèle de la Communauté",
+            status: status,
             isOnline: bu.isOnline !== undefined ? bu.isOnline : (Math.random() > 0.4),
           };
-
-          if (existsIdx >= 0) {
-            updated[existsIdx] = {
-              ...updated[existsIdx],
-              ...standardized,
-              status: updated[existsIdx].status
-            };
-          } else {
-            updated.push(standardized);
-          }
         });
-        return updated;
-      });
+      
+      setFriends(friendsList);
     } catch (err) {
       console.warn("Could not search registered users", err);
     }
@@ -961,7 +892,7 @@ export default function App() {
     }
   };
 
-  const handleSendFriendRequest = (friendId: string) => {
+  const handleSendFriendRequest = async (friendId: string) => {
     setFriends(prev => prev.map(f => {
       if (f.id === friendId) {
         return { ...f, status: 'pending_sent' };
@@ -972,41 +903,54 @@ export default function App() {
     // Play a sending chime
     playPusherPing();
 
-    // Auto-approve after 3.5 seconds to simulate other user accepting and notify
-    setTimeout(() => {
-      setFriends(prev => prev.map(f => {
-        if (f.id === friendId) {
-          return { ...f, status: 'accepted', isOnline: true };
+    try {
+      await apiService.sendFriendRequest(friendId);
+
+      // Auto-approve after 3.5 seconds to simulate other user accepting and notify
+      setTimeout(async () => {
+        try {
+          await apiService.acceptFriendRequest(friendId);
+        } catch (err) {
+          console.warn("Could not auto-accept friendship on backend", err);
         }
-        return f;
-      }));
 
-      // Play double-tone notification sound for the accepted friend
-      playPusherPing();
+        setFriends(prev => prev.map(f => {
+          if (f.id === friendId) {
+            return { ...f, status: 'accepted', isOnline: true };
+          }
+          return f;
+        }));
 
-      // Retrieve name from the fresh state
-      setFriends(currentFriends => {
-        const acceptedFriend = currentFriends.find(f => f.id === friendId);
-        const name = acceptedFriend ? acceptedFriend.name : 'Un fidèle';
+        // Play double-tone notification sound for the accepted friend
+        playPusherPing();
 
-        const newNotif: SpiritNotification = {
-          id: `notif_accept_auto_${Date.now()}`,
-          title: "Fraternité acceptée ! 🤝",
-          description: `Vous avez un ami qui vous a accepté : ${name} est maintenant connecté avec vous. Vous pouvez communiquer !`,
-          time: "À l'instant",
-          isRead: false,
-          type: 'friend_accept'
-        };
+        // Retrieve name from the fresh state
+        setFriends(currentFriends => {
+          const acceptedFriend = currentFriends.find(f => f.id === friendId);
+          const name = acceptedFriend ? acceptedFriend.name : 'Un fidèle';
 
-        setNotifications(prev => [newNotif, ...prev]);
-        return currentFriends;
-      });
+          const newNotif: SpiritNotification = {
+            id: `notif_accept_auto_${Date.now()}`,
+            title: "Fraternité acceptée ! 🤝",
+            description: `Vous avez un ami qui vous a accepté : ${name} est maintenant connecté avec vous. Vous pouvez communiquer !`,
+            time: "À l'instant",
+            isRead: false,
+            type: 'friend_accept'
+          };
 
-      handleAddXP(40);
-    }, 3500);
+          setNotifications(prev => [newNotif, ...prev]);
+          return currentFriends;
+        });
+
+        handleAddXP(40);
+      }, 3500);
+
+    } catch (e) {
+      console.warn("Failed to send friend request on backend", e);
+    }
   };
 
-  const handleAcceptFriendRequest = (friendId: string) => {
+  const handleAcceptFriendRequest = async (friendId: string) => {
     setFriends(prev => prev.map(f => {
       if (f.id === friendId) {
         return { ...f, status: 'accepted', isOnline: true };
@@ -1024,10 +968,27 @@ export default function App() {
     };
     setNotifications(prev => [newNotif, ...prev]);
     handleAddXP(40);
+
+    try {
+      await apiService.acceptFriendRequest(friendId);
+    } catch (e) {
+      console.warn("Failed to accept friend request on backend", e);
+    }
   };
 
-  const handleRemoveFriend = (friendId: string) => {
-    setFriends(prev => prev.filter(f => f.id !== friendId));
+  const handleRemoveFriend = async (friendId: string) => {
+    setFriends(prev => prev.map(f => {
+      if (f.id === friendId) {
+        return { ...f, status: 'none' };
+      }
+      return f;
+    }));
+
+    try {
+      await apiService.removeFriend(friendId);
+    } catch (e) {
+      console.warn("Failed to remove friend on backend", e);
+    }
   };
 
   const handleSendDirectMessage = async (recipientId: string, text?: string, images?: string[], audioUrl?: string, audioDuration?: string) => {
