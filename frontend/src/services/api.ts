@@ -576,107 +576,42 @@ export const apiService = {
   },
 
   async getRegisteredUsers(search = ''): Promise<any[]> {
-    const localUsersStr = localStorage.getItem('spirittalk_simulated_users');
-    const localUsers = localUsersStr ? JSON.parse(localUsersStr) : [];
-    
-    let backendUsers: any[] = [];
     const query = search.trim();
     const queryString = query ? `?search=${encodeURIComponent(query)}` : '';
-    const endpoints = [`${API_BASE_URL}/users${queryString}`, `${API_BASE_URL}/members${queryString}`, `${API_BASE_URL}/all-users${queryString}`];
-    for (const url of endpoints) {
-      try {
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: getHeaders()
-        });
-        if (response.ok) {
-          const data = await response.json();
-          if (Array.isArray(data)) {
-            backendUsers = data;
-            break;
-          } else if (data && Array.isArray(data.users)) {
-            backendUsers = data.users;
-            break;
-          }
-        }
-      } catch (err) {
-        console.warn(`Failed to fetch users from ${url}`, err);
-      }
-    }
-    
-    // If backend failed/is empty, try to harvest users from public inspirations
-    if (backendUsers.length === 0) {
-      try {
-        const response = await fetch(`${API_BASE_URL}/inspirations`, {
-          method: 'GET',
-          headers: getHeaders()
-        });
-        if (response.ok) {
-          const data = await response.json();
-          if (Array.isArray(data)) {
-            const harvested: Record<string, any> = {};
-            data.forEach((item: any) => {
-              if (item.user && item.user.id) {
-                harvested[item.user.id] = {
-                  id: item.user.id.toString(),
-                  name: item.user.name,
-                  username: item.user.username,
-                  avatar: item.user.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
-                  religion: item.user.religion || 'Mixte',
-                  profession: item.user.profession || "Fidèle de la Communauté",
-                  isOnline: Math.random() > 0.4
-                };
-              }
-            });
-            backendUsers = Object.values(harvested);
-          }
-        }
-      } catch (err) {
-        console.warn("Failed to harvest users from inspirations", err);
-      }
-    }
-    
-    // Merge backendUsers and localUsers. Prefer backend version if ID matches, but keep all unique ones
-    const merged: Record<string, any> = {};
-    
-    backendUsers.forEach((u: any) => {
-      const key = (u.email || u.username || u.id?.toString() || '').toLowerCase();
-      if (key) {
-        merged[key] = {
-          id: u.id?.toString() || u.username || 'user',
-          name: u.name,
-          username: u.username,
-          avatar: u.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
-          religion: u.religion || 'Mixte',
-          profession: u.profession || "Fidèle de la Communauté",
-          isOnline: u.isOnline !== undefined ? u.isOnline : (Math.random() > 0.4)
-        };
-      }
-    });
+    const url = `${API_BASE_URL}/users${queryString}`;
 
-    localUsers
-      .filter((u: any) => {
-        if (!query) return true;
-        const needle = query.toLowerCase();
-        return [u.name, u.username, u.email, u.profession]
-          .filter(Boolean)
-          .some((value: string) => value.toLowerCase().startsWith(needle) || value.toLowerCase().includes(` ${needle}`));
-      })
-      .forEach((u: any) => {
-      const key = (u.email || u.username || u.id?.toString() || '').toLowerCase();
-      if (key && !merged[key]) {
-        merged[key] = {
-          id: u.id?.toString() || u.username || 'user',
-          name: u.name,
-          username: u.username,
-          avatar: u.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
-          religion: u.religion || 'Mixte',
-          profession: u.profession || "Fidèle de la Communauté",
-          isOnline: u.isOnline !== undefined ? u.isOnline : (Math.random() > 0.4)
-        };
-      }
-    });
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: getHeaders()
+      });
 
-    return Object.values(merged);
+      console.log(`[getRegisteredUsers] GET ${url} → HTTP ${response.status}`);
+
+      if (!response.ok) {
+        console.warn(`[getRegisteredUsers] API returned ${response.status}. Token présent: ${!!localStorage.getItem('spirittalk_token')}`);
+        return [];
+      }
+
+      const data = await response.json();
+
+      // Le backend retourne { users: [...] }
+      if (data && Array.isArray(data.users)) {
+        console.log(`[getRegisteredUsers] ${data.users.length} utilisateurs reçus`);
+        return data.users;
+      }
+
+      // Fallback si le format est un tableau direct
+      if (Array.isArray(data)) {
+        console.log(`[getRegisteredUsers] ${data.length} utilisateurs reçus (tableau direct)`);
+        return data;
+      }
+
+      console.warn('[getRegisteredUsers] Format inattendu:', JSON.stringify(data).substring(0, 200));
+      return [];
+    } catch (err) {
+      console.error(`[getRegisteredUsers] Erreur réseau:`, err);
+      return [];
+    }
   }
 };

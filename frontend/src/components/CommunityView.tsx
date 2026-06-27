@@ -54,12 +54,15 @@ export default function CommunityView({
   // Friends search filter
   const [friendsSearch, setFriendsSearch] = useState('');
   const [friendsFilter, setFriendsFilter] = useState<'All' | 'Chrétienne' | 'Musulmane'>('All');
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
 
   useEffect(() => {
     if (activeTab !== 'friends') return;
-    const timeoutId = window.setTimeout(() => {
-      onSearchMembers(friendsSearch);
-    }, 250);
+    setIsLoadingMembers(true);
+    const timeoutId = window.setTimeout(async () => {
+      await onSearchMembers(friendsSearch);
+      setIsLoadingMembers(false);
+    }, 300);
 
     return () => window.clearTimeout(timeoutId);
   }, [activeTab, friendsSearch, onSearchMembers]);
@@ -121,12 +124,11 @@ export default function CommunityView({
     return post.religion === feedFilter;
   });
 
+  // La recherche textuelle est gérée par onSearchMembers (côté backend)
+  // On applique uniquement le filtre de religion localement
   const filteredFriends = friends.filter(f => {
-    const matchesSearch = f.name.toLowerCase().includes(friendsSearch.toLowerCase()) || 
-                          f.username.toLowerCase().includes(friendsSearch.toLowerCase()) ||
-                          (f.profession && f.profession.toLowerCase().includes(friendsSearch.toLowerCase()));
     const matchesReligion = friendsFilter === 'All' || f.religion === friendsFilter;
-    return matchesSearch && matchesReligion;
+    return matchesReligion;
   });
 
   const unreadNotifCount = notifications.filter(n => !n.isRead).length;
@@ -582,7 +584,12 @@ export default function CommunityView({
                 <span className="h-px bg-cream-darker dark:bg-charcoal-light/10 flex-grow ml-3"></span>
               </div>
 
-              {myRelations.length === 0 ? (
+              {isLoadingMembers ? (
+                <div className="text-center py-6 text-slate-400 text-xs flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
+                  Chargement des membres...
+                </div>
+              ) : myRelations.length === 0 ? (
                 <div className="text-center py-6 px-4 bg-slate-50/50 dark:bg-charcoal-card/20 rounded-2xl border border-dashed border-cream-darker text-slate-400 text-xs italic">
                   Vous n'avez pas encore de relations fraternelles établies. Ajoutez des fidèles ci-dessous pour démarrer des échanges spirituels !
                 </div>
@@ -668,9 +675,14 @@ export default function CommunityView({
                 <span className="h-px bg-cream-darker dark:bg-charcoal-light/10 flex-grow ml-3"></span>
               </div>
 
-              {discoverRelations.length === 0 ? (
+              {isLoadingMembers ? (
+                <div className="text-center py-6 text-slate-400 text-xs flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
+                  Recherche en cours...
+                </div>
+              ) : discoverRelations.length === 0 ? (
                 <div className="text-center py-6 px-4 bg-slate-50/50 dark:bg-charcoal-card/20 rounded-2xl border border-dashed border-cream-darker text-slate-400 text-xs italic">
-                  Aucun autre fidèle à découvrir pour le moment.
+                  {friendsSearch ? `Aucun résultat pour "${friendsSearch}".` : 'Aucun autre fidèle à découvrir pour le moment.'}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

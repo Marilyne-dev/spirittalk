@@ -13,10 +13,12 @@ class DirectMessage extends Model {
         'audio_url',
         'audio_duration',
         'call_type',
+        'read_at',
     ];
 
     protected $casts = [
-        'images' => 'array',
+        'images'  => 'array',
+        'read_at' => 'datetime',
     ];
 
     public function sender() {
