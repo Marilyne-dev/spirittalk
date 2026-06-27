@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\CallSignal;
 use App\Events\NewDirectMessage;
 use App\Events\TypingStatus;
 use App\Models\DirectMessage;
@@ -45,8 +46,7 @@ class DirectMessageController extends Controller {
 
         $formatted = $this->formatMessage($message, $sender->id);
 
-        // Broadcast to recipient's private Pusher channel
-        broadcast(new NewDirectMessage($formatted, (int) $fields['recipient_id']));
+        broadcast(new NewDirectMessage($formatted, (int) $sender->id, (int) $fields['recipient_id']));
 
         return response()->json($formatted, 201);
     }
@@ -91,6 +91,25 @@ class DirectMessageController extends Controller {
             ->mapWithKeys(fn ($row) => [(string) $row->sender_id => $row->count]);
 
         return response()->json($counts);
+    }
+
+    public function callSignal(Request $request) {
+        $fields = $request->validate([
+            'recipient_id' => 'required|integer|exists:users,id',
+            'signal' => 'required|array',
+            'type' => 'required|string|in:offer,answer,ice-candidate,hangup,ringing',
+        ]);
+
+        $sender = $request->user();
+
+        broadcast(new CallSignal(
+            $fields['signal'],
+            (int) $sender->id,
+            (int) $fields['recipient_id'],
+            $fields['type']
+        ));
+
+        return response()->json(['success' => true]);
     }
 
     private function formatMessage(DirectMessage $message, int $currentUserId): array {

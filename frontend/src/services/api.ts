@@ -575,6 +575,36 @@ export const apiService = {
     }
   },
 
+  async sendTypingStatus(recipientId: string, isTyping: boolean) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/direct-messages/typing`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ recipient_id: recipientId, is_typing: isTyping }),
+      });
+      if (!response.ok) throw new Error('Server returned ' + response.status);
+      return await response.json();
+    } catch (error) {
+      console.warn("Failed to send typing status to Laravel backend", error);
+      return null;
+    }
+  },
+
+  async sendCallSignal(recipientId: string, signal: any, type: string) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/direct-messages/call-signal`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ recipient_id: recipientId, signal, type }),
+      });
+      if (!response.ok) throw new Error('Server returned ' + response.status);
+      return await response.json();
+    } catch (error) {
+      console.warn("Failed to send call signal to Laravel backend", error);
+      return null;
+    }
+  },
+
   async getRegisteredUsers(search = ''): Promise<any[]> {
     const query = search.trim();
     const queryString = query ? `?search=${encodeURIComponent(query)}` : '';

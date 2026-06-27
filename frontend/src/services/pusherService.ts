@@ -1,7 +1,7 @@
 import Pusher from 'pusher-js';
 
-const PUSHER_KEY = (import.meta as any).env?.VITE_PUSHER_KEY || '90d62d83f3f63ace0173';
-const PUSHER_CLUSTER = (import.meta as any).env?.VITE_PUSHER_CLUSTER || 'eu';
+const PUSHER_KEY = (import.meta as any).env?.VITE_PUSHER_APP_KEY || (import.meta as any).env?.VITE_PUSHER_KEY || '90d62d83f3f63ace0173';
+const PUSHER_CLUSTER = (import.meta as any).env?.VITE_PUSHER_APP_CLUSTER || (import.meta as any).env?.VITE_PUSHER_CLUSTER || 'eu';
 
 export interface PusherMessagePayload {
   id?: string;
@@ -30,11 +30,19 @@ export interface PusherPostPayload {
   verse_text?: string;
 }
 
+export interface PusherCallPayload {
+  senderId: number;
+  recipientId: number;
+  type: string;
+  signal: any;
+}
+
 export const pusherService = {
   initialize(
     onNewMessage: (msg: PusherMessagePayload) => void,
     onNewPost: (post: PusherPostPayload) => void,
-    onFriendTyping: (friendId: string, isTyping: boolean) => void
+    onFriendTyping: (friendId: string, isTyping: boolean, recipientId: string) => void,
+    onCallSignal?: (payload: PusherCallPayload) => void
   ) {
     console.log('🔔 Initializing real-time synchronization with Pusher...', { key: PUSHER_KEY, cluster: PUSHER_CLUSTER });
     
@@ -66,7 +74,7 @@ export const pusherService = {
         });
       });
 
-      // 2. Subscribe to Private Messaging channel
+      // 2. Subscribe to shared messaging channel
       const chatChannel = pusher.subscribe('spirittalk-chat');
 
       chatChannel.bind('new-message', (data: any) => {
@@ -85,9 +93,26 @@ export const pusherService = {
 
       chatChannel.bind('typing-status', (data: any) => {
         console.log('✍️ [Pusher] Typing status received:', data);
-        if (data.userId) {
-          onFriendTyping(data.userId, !!data.isTyping);
+        const senderId = data.senderId || data.userId;
+        const recipientId = data.recipientId ?? data.recipient_id;
+        if (senderId && recipientId) {
+          onFriendTyping(String(senderId), !!data.isTyping, String(recipientId));
         }
+      });
+
+      const callChannel = pusher.subscribe('spirittalk-calls');
+      callChannel.bind('call-signal', (data: any) => {
+        console.log('📞 [Pusher] Call signal received:', data);
+        if (!data || !data.recipientId) {
+          onCallSignal?.(data);
+          return;
+        }
+        onCallSignal?.({
+          senderId: data.senderId,
+          recipientId: data.recipientId,
+          type: data.type,
+          signal: data.signal,
+        });
       });
 
       pusher.connection.bind('state_change', (states: { current: string }) => {

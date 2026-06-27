@@ -10,16 +10,22 @@ interface InboxViewProps {
   user: any;
   friends: Friend[];
   messages: DirectMessage[];
+  unreadCounts: Record<string, number>;
   onSendMessage: (recipientId: string, text?: string, images?: string[], audioUrl?: string, audioDuration?: string) => void;
   onSimulateTyping: (recipientId: string) => void;
+  onSelectFriend: (friendId: string) => void;
+  onStartCall: (recipientId: string, mode: 'audio' | 'video') => void;
 }
 
 export default function InboxView({
   user,
   friends,
   messages,
+  unreadCounts,
   onSendMessage,
-  onSimulateTyping
+  onSimulateTyping,
+  onSelectFriend,
+  onStartCall
 }: InboxViewProps) {
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
@@ -177,10 +183,15 @@ export default function InboxView({
                    (m.senderId === friend.id && m.recipientId === 'me')
             ).slice(-1)[0];
 
+            const unread = unreadCounts[friend.id] || 0;
+
             return (
               <button
                 key={friend.id}
-                onClick={() => setSelectedFriendId(friend.id)}
+                onClick={() => {
+                  onSelectFriend(friend.id);
+                  setSelectedFriendId(friend.id);
+                }}
                 className={`w-full text-left p-3 rounded-2xl flex items-center gap-3 transition-all ${
                   selectedFriendId === friend.id
                     ? 'bg-emerald-medium/10 border border-emerald-medium/20 text-emerald-deep dark:text-gold-bright'
@@ -275,13 +286,13 @@ export default function InboxView({
 
             <div className="flex gap-2">
               <button 
-                onClick={() => alert(`Lancement de l'appel vocal sécurisé de SpiritTalk avec ${selectedFriend.name}...`)}
+                onClick={() => onStartCall(selectedFriend.id, 'audio')}
                 className="p-2 hover:bg-slate-100 dark:hover:bg-charcoal-light/30 rounded-xl text-slate-400 hover:text-emerald-medium"
               >
                 <Phone className="w-4 h-4" />
               </button>
               <button 
-                onClick={() => alert(`Lancement de l'appel vidéo de SpiritTalk avec ${selectedFriend.name}...`)}
+                onClick={() => onStartCall(selectedFriend.id, 'video')}
                 className="p-2 hover:bg-slate-100 dark:hover:bg-charcoal-light/30 rounded-xl text-slate-400 hover:text-emerald-medium"
               >
                 <Video className="w-4 h-4" />

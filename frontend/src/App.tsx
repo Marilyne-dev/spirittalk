@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { Home, Sparkles, Search, User, Award, Moon, Sun, Bell, MessageSquare, Users, MessageCircle } from 'lucide-react';
 import { ChatMessage, Bookmark, Note, InspirationCard, Religion, CommunityPost, Friend, DirectMessage, SpiritNotification } from './types';
 import HomeView from './components/HomeView';
@@ -44,8 +44,6 @@ const PRE_SEEDED_CHAT: ChatMessage[] = [
     }
   }
 ];
-
-
 
 const PRE_SEEDED_POSTS: CommunityPost[] = [
   {
@@ -149,6 +147,12 @@ export default function App() {
 
   const [currentTab, setCurrentTab] = useState<'home' | 'community' | 'inbox' | 'chat' | 'search' | 'profile'>('home');
   const [darkMode, setDarkMode] = useState<boolean>(false);
+  const [activeCall, setActiveCall] = useState<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
+  const peerConnectionRef = useRef<any>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const currentCallRef = useRef<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
+  const pendingCallRef = useRef<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
 
   // Community States
   const [posts, setPosts] = useState<CommunityPost[]>(() => {
@@ -171,6 +175,11 @@ export default function App() {
   const [notifications, setNotifications] = useState<SpiritNotification[]>(() => {
     const saved = localStorage.getItem('spirittalk_notifications');
     return saved ? JSON.parse(saved) : [];
+  });
+
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>(() => {
+    const saved = localStorage.getItem('spirittalk_unread_counts');
+    return saved ? JSON.parse(saved) : {};
   });
   
   // Persisted Stats & Data
@@ -251,6 +260,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('spirittalk_notifications', JSON.stringify(notifications));
   }, [notifications]);
+
+  useEffect(() => {
+    localStorage.setItem('spirittalk_unread_counts', JSON.stringify(unreadCounts));
+  }, [unreadCounts]);
 
   // Sync Dark mode HTML class
   useEffect(() => {
@@ -333,7 +346,7 @@ export default function App() {
                 if (u.email.toLowerCase() === user.email.toLowerCase() || u.username.toLowerCase() === user.username.toLowerCase()) return;
                 
                 const existsIdx = updated.findIndex(f => f.email?.toLowerCase() === u.email.toLowerCase() || f.username.toLowerCase() === u.username.toLowerCase() || f.id?.toString() === u.id?.toString());
-                const stdUser = {
+                const stdUser: Friend = {
                   id: u.id || u.username,
                   name: u.name,
                   username: u.username,
@@ -407,7 +420,7 @@ export default function App() {
                 if (u.email.toLowerCase() === user.email.toLowerCase() || u.username.toLowerCase() === user.username.toLowerCase()) return;
                 
                 const existsIdx = updated.findIndex(f => f.email?.toLowerCase() === u.email.toLowerCase() || f.username.toLowerCase() === u.username.toLowerCase() || f.id?.toString() === u.id?.toString());
-                const stdUser = {
+                const stdUser: Friend = {
                   id: u.id || u.username,
                   name: u.name,
                   username: u.username,
@@ -445,14 +458,18 @@ export default function App() {
     // Also run original Pusher triggers as a hybrid redundancy layer
     const pusher = pusherService.initialize(
       (newMsg) => {
-        if (newMsg.senderId !== 'me') {
+        const currentUserKey = (user.email || user.username || user.id?.toString() || '').toLowerCase();
+        const mappedSenderId = (newMsg.senderId?.toLowerCase() === currentUserKey) ? 'me' : newMsg.senderId;
+        const mappedRecipientId = (newMsg.recipientId?.toLowerCase() === currentUserKey) ? 'me' : newMsg.recipientId;
+
+        if (mappedSenderId !== 'me') {
           setDirectMessages(prev => {
             const exists = prev.some(m => m.id === newMsg.id);
             if (exists) return prev;
             return [...prev, {
               id: newMsg.id || `dm_msg_${Date.now()}`,
-              senderId: newMsg.senderId,
-              recipientId: newMsg.recipientId,
+              senderId: mappedSenderId,
+              recipientId: mappedRecipientId,
               text: newMsg.text,
               images: newMsg.images,
               audioUrl: newMsg.audioUrl,
@@ -473,6 +490,46 @@ export default function App() {
       },
       (friendId, isTyping) => {
         setFriends(prev => prev.map(f => f.id === friendId ? { ...f, isTyping } : f));
+      },
+      async (callPayload) => {
+        if (!user) return;
+        const peerId = String(callPayload.senderId);
+        if (callPayload.type === 'offer' && peerId !== user.id?.toString()) {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            localStreamRef.current = stream;
+            const pc = new RTCPeerConnection({ iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] });
+            peerConnectionRef.current = pc;
+            stream.getTracks().forEach(track => pc.addTrack(track, stream));
+            pc.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
+              if (event.candidate) {
+                void apiService.sendCallSignal(String(callPayload.senderId), event.candidate.toJSON(), 'ice-candidate');
+              }
+            };
+            pc.ontrack = (event) => {
+              if (remoteAudioRef.current) {
+                remoteAudioRef.current.srcObject = event.streams[0];
+                void remoteAudioRef.current.play().catch(() => undefined);
+              }
+            };
+            await pc.setRemoteDescription(callPayload.signal);
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            await apiService.sendCallSignal(String(callPayload.senderId), answer, 'answer');
+            currentCallRef.current = { peerId, mode: 'audio' };
+            setActiveCall({ peerId, mode: 'audio' });
+          } catch (error) {
+            console.warn('Could not answer call', error);
+          }
+        }
+
+        if (callPayload.type === 'answer' && peerConnectionRef.current) {
+          await peerConnectionRef.current.setRemoteDescription(callPayload.signal);
+        }
+
+        if (callPayload.type === 'ice-candidate' && peerConnectionRef.current) {
+          await peerConnectionRef.current.addIceCandidate(callPayload.signal);
+        }
       }
     );
 
@@ -539,13 +596,14 @@ export default function App() {
               const isMe = bu.email === user.email || bu.username === user.username || bu.id?.toString() === user.id?.toString() || bu.id_user?.toString() === user.id?.toString();
               return !isMe;
             })
-            .map((bu: any) => {
+            .map((bu: any): Friend => {
               const key = (bu.email || bu.username || bu.id?.toString() || '').toLowerCase();
-              const status = friendshipMap.get(key) || 'none';
+              const status = (friendshipMap.get(key) || 'none') as Friend['status'];
               return {
                 id: bu.id?.toString() || bu.username,
                 name: bu.name,
                 username: bu.username,
+                email: bu.email,
                 avatar: bu.avatar || "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200",
                 religion: bu.religion || 'Mixte',
                 profession: bu.profession || "Fidèle de la Communauté",
@@ -588,9 +646,9 @@ export default function App() {
               const isMe = bu.email === user.email || bu.username === user.username || bu.id?.toString() === user.id?.toString() || bu.id_user?.toString() === user.id?.toString();
               return !isMe;
             })
-            .map((bu: any) => {
+            .map((bu: any): Friend => {
               const key = (bu.email || bu.username || bu.id?.toString() || '').toLowerCase();
-              const status = friendshipMap.get(key) || 'none';
+              const status = (friendshipMap.get(key) || 'none') as Friend['status'];
               return {
                 id: bu.id?.toString() || bu.username,
                 name: bu.name,
@@ -615,9 +673,9 @@ export default function App() {
           const isMe = bu.email === user.email || bu.username === user.username || bu.id?.toString() === user.id?.toString() || bu.id_user?.toString() === user.id?.toString();
           return !isMe;
         })
-        .map((bu: any) => {
+        .map((bu: any): Friend => {
           const key = (bu.email || bu.username || bu.id?.toString() || '').toLowerCase();
-          const status = friendshipMap.get(key) || 'none';
+          const status = (friendshipMap.get(key) || 'none') as Friend['status'];
           return {
             id: bu.id?.toString() || bu.username,
             name: bu.name,
@@ -892,6 +950,61 @@ export default function App() {
     }
   };
 
+  const setupWebRtc = useCallback(async (peerId: string, mode: 'audio' | 'video' = 'audio') => {
+    if (!user) return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: mode === 'video'
+      });
+      localStreamRef.current = stream;
+
+      const pc = new RTCPeerConnection({ iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] });
+      peerConnectionRef.current = pc;
+
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+      pc.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
+        if (event.candidate) {
+          void apiService.sendCallSignal(peerId, event.candidate.toJSON(), 'ice-candidate');
+        }
+      };
+
+      pc.ontrack = (event) => {
+        if (remoteAudioRef.current) {
+          remoteAudioRef.current.srcObject = event.streams[0];
+          void remoteAudioRef.current.play().catch(() => undefined);
+        }
+      };
+
+      currentCallRef.current = { peerId, mode };
+      setActiveCall({ peerId, mode });
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await apiService.sendCallSignal(peerId, offer, 'offer');
+    } catch (error) {
+      console.warn('WebRTC setup failed', error);
+      window.alert('Votre navigateur bloque l’accès au microphone.');
+    }
+  }, [user]);
+
+  const handleStartCall = useCallback(async (friendId: string, mode: 'audio' | 'video' = 'audio') => {
+    pendingCallRef.current = { peerId: friendId, mode };
+    await setupWebRtc(friendId, mode);
+  }, [setupWebRtc]);
+
+  const handleEndCall = useCallback(() => {
+    peerConnectionRef.current?.close();
+    peerConnectionRef.current = null;
+    localStreamRef.current?.getTracks().forEach(track => track.stop());
+    localStreamRef.current = null;
+    currentCallRef.current = null;
+    pendingCallRef.current = null;
+    setActiveCall(null);
+  }, []);
+
   const handleSendFriendRequest = async (friendId: string) => {
     setFriends(prev => prev.map(f => {
       if (f.id === friendId) {
@@ -1006,25 +1119,14 @@ export default function App() {
       audioDuration
     };
     setDirectMessages(prev => [...prev, newMsg]);
+    setUnreadCounts(prev => {
+      const copy = { ...prev };
+      delete copy[recipientId];
+      return copy;
+    });
 
     try {
-      const targetFriend = friends.find(f => f.id === recipientId);
-      const targetKey = targetFriend?.email || targetFriend?.username || recipientId;
-
-      await fetch('/api/chat/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: newMsgId,
-          senderId: user.email || user.username || user.id?.toString(),
-          recipientId: targetKey,
-          text,
-          images,
-          audioUrl,
-          audioDuration,
-          timestamp: timestampStr
-        })
-      });
+      await apiService.sendDirectMessage(String(recipientId), text, images, audioUrl, audioDuration);
     } catch (err) {
       console.warn("Failed to transmit message through server", err);
     }
@@ -1032,83 +1134,21 @@ export default function App() {
 
   const handleSimulateTyping = async (recipientId: string) => {
     try {
-      const targetFriend = friends.find(f => f.id === recipientId);
-      const targetKey = targetFriend?.email || targetFriend?.username || recipientId;
-
-      await fetch('/api/chat/typing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.email || user.username || user.id?.toString(),
-          recipientId: targetKey,
-          isTyping: true
-        })
-      });
+      await apiService.sendTypingStatus(String(recipientId), true);
 
       setTimeout(async () => {
         try {
-          await fetch('/api/chat/typing', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId: user.email || user.username || user.id?.toString(),
-              recipientId: targetKey,
-              isTyping: false
-            })
-          });
+          await apiService.sendTypingStatus(String(recipientId), false);
         } catch (e) {}
       }, 3000);
-    } catch (err) {}
+    } catch (err) {
+      console.warn('Typing status failed', err);
+    }
 
-    const activeFriend = friends.find(f => f.id === recipientId);
-    if (!activeFriend) return;
-
-    // Simulate standard Theological AI fallback (only run if no other real users are actively typing/sending)
+    setFriends(prev => prev.map(f => f.id === recipientId ? { ...f, isTyping: true } : f));
     setTimeout(() => {
-      setFriends(prev => prev.map(f => f.id === recipientId ? { ...f, isTyping: true } : f));
-      
-      setTimeout(() => {
-        setFriends(prev => prev.map(f => f.id === recipientId ? { ...f, isTyping: false } : f));
-        
-        let replyText = "Que la paix et la bénédiction de Dieu t'accompagnent mon frère / ma sœur. C'est un immense bonheur de pouvoir échanger avec toi aujourd'hui !";
-        if (activeFriend.religion === 'Chrétienne') {
-          const christianQuotes = [
-            "Gloire à Dieu ! Que Sa parole soit une lampe à nos pieds et une lumière sur notre sentier (Psaume 119:105). Demeurons confiants.",
-            "Amen ! Rappelons-nous que tout est possible à celui qui croit (Marc 9:23). Je prie pour toi aujourd'hui.",
-            "Merci pour ce partage fraternel ! Le Seigneur est notre berger, nous ne manquerons de rien."
-          ];
-          replyText = christianQuotes[Math.floor(Math.random() * christianQuotes.length)];
-        } else {
-          const muslimQuotes = [
-            "Barak'Allahu feek ! Certes, la prière apaise les cœurs et éloigne l'angoisse. Qu'Allah te protège.",
-            "Alhamdulillah ! C'est un excellent rappel. 'Certes, après la difficulté vient la facilité' (Coran 94:5).",
-            "Masha'Allah mon frère ! Que la paix ('Salam') d'Allah soit sur toi et ta sainte demeure."
-          ];
-          replyText = muslimQuotes[Math.floor(Math.random() * muslimQuotes.length)];
-        }
-
-        const replyMsg: DirectMessage = {
-          id: `dm_msg_reply_${Date.now()}`,
-          senderId: recipientId,
-          recipientId: 'me',
-          text: replyText,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-        setDirectMessages(prev => [...prev, replyMsg]);
-        playPusherPing();
-        
-        const newNotif: SpiritNotification = {
-          id: `notif_msg_${Date.now()}`,
-          title: `Nouveau message de ${activeFriend.name}`,
-          description: replyText.substring(0, 50) + "...",
-          time: "À l'instant",
-          isRead: false,
-          type: 'message'
-        };
-        setNotifications(prev => [newNotif, ...prev]);
-      }, 2500);
-
-    }, 1500);
+      setFriends(prev => prev.map(f => f.id === recipientId ? { ...f, isTyping: false } : f));
+    }, 2000);
   };
 
   // Render Authentication screen if not logged in
@@ -1118,6 +1158,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-cream-base dark:bg-charcoal-dark text-slate-800 dark:text-cream-base flex flex-col md:flex-row transition-colors duration-300">
+      <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
       
       {/* Sidebar Navigation for Desktop */}
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-20 flex-col items-center py-6 gap-8 border-r border-cream-darker dark:border-charcoal-light/10 bg-white/70 dark:bg-charcoal-card/70 backdrop-blur-md z-40">
@@ -1293,8 +1334,17 @@ export default function App() {
               user={user}
               friends={friends}
               messages={directMessages}
+              unreadCounts={unreadCounts}
               onSendMessage={handleSendDirectMessage}
               onSimulateTyping={handleSimulateTyping}
+              onSelectFriend={(friendId) => {
+                setUnreadCounts(prev => {
+                  const copy = { ...prev };
+                  delete copy[friendId];
+                  return copy;
+                });
+              }}
+              onStartCall={handleStartCall}
             />
           )}
 

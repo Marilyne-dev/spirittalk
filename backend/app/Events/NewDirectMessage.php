@@ -4,7 +4,6 @@ namespace App\Events;
 
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
@@ -15,13 +14,14 @@ class NewDirectMessage implements ShouldBroadcastNow
 
     public function __construct(
         public readonly array $message,
+        public readonly int $senderId,
         public readonly int $recipientId
     ) {}
 
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel('chat.' . $this->recipientId),
+            new Channel('spirittalk-chat'),
         ];
     }
 
@@ -32,6 +32,10 @@ class NewDirectMessage implements ShouldBroadcastNow
 
     public function broadcastWith(): array
     {
-        return $this->message;
+        return [
+            'message' => $this->message,
+            'senderId' => (string) $this->senderId,
+            'recipientId' => (string) $this->recipientId,
+        ];
     }
 }

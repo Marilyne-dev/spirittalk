@@ -38,6 +38,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/friendships/{id}', [FriendshipController::class, 'destroy']);
     Route::get('/direct-messages', [DirectMessageController::class, 'index']);
     Route::post('/direct-messages', [DirectMessageController::class, 'store']);
+    Route::post('/direct-messages/typing', [DirectMessageController::class, 'typing']);
+    Route::post('/direct-messages/call-signal', [DirectMessageController::class, 'callSignal']);
     
     // Plans de Lecture & Progression
     Route::get('/reading-plans', [ReadingPlanController::class, 'index']);
