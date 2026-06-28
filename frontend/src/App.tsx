@@ -216,6 +216,28 @@ export default function App() {
     }).catch(() => {});
   }, [user]);
 
+  // ── handleEndCall déclaré tôt pour pouvoir être référencé dans les useEffect ──
+  const handleEndCall = useCallback(() => {
+    peerConnectionRef.current?.close();
+    peerConnectionRef.current = null;
+    localStreamRef.current?.getTracks().forEach(track => track.stop());
+    localStreamRef.current = null;
+    currentCallRef.current = null;
+    pendingCallRef.current = null;
+    setActiveCall(null);
+    // ── CHANGEMENT 4a : notifier InboxView que l'appel est terminé ──
+    window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'call_ended' } }));
+  }, []);
+
+  // ── CHANGEMENT 4b : écouter le raccrochage émis par InboxView ──
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (e.detail?.type === 'hang_up') handleEndCall();
+    };
+    window.addEventListener('spirittalk_call_event', handler);
+    return () => window.removeEventListener('spirittalk_call_event', handler);
+  }, [handleEndCall]);
+
   // Accepter l'appel entrant
   const handleAcceptCall = useCallback(async () => {
     if (!incomingCall) return;
@@ -244,6 +266,8 @@ export default function App() {
       await apiService.sendCallSignal(peerId, answer, 'answer');
       currentCallRef.current = { peerId, mode: 'audio' };
       setActiveCall({ peerId, mode: 'audio' });
+      // ── CHANGEMENT 3 : notifier InboxView que l'appel est décroché ──
+      window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'call_accepted' } }));
     } catch (error) {
       console.warn('Could not answer call', error);
       alert('Impossible d\'accéder au microphone.');
@@ -259,6 +283,7 @@ export default function App() {
     if (!user) return;
 
     const pusher = pusherService.initialize(
+      // ── CHANGEMENT 1 : recipientId = myId (vrai ID) au lieu de 'me' ──
       (newMsg) => {
         const myId = String(user.id);
         const rawSenderId = String(newMsg.senderId);
@@ -267,7 +292,7 @@ export default function App() {
         const mappedMsg: DirectMessage = {
           id: newMsg.id ? String(newMsg.id) : `dm_pusher_${rawSenderId}_${Date.now()}`,
           senderId: rawSenderId,
-          recipientId: 'me',
+          recipientId: myId,   // ← FIX : vrai ID, pas 'me'
           text: newMsg.text,
           images: newMsg.images,
           audioUrl: newMsg.audioUrl,
@@ -296,10 +321,11 @@ export default function App() {
         }
       },
 
+      // ── CHANGEMENT 2 : toujours appeler __inboxSetLiveTyping avec isTyping ──
       (friendId, isTyping, liveText?: string) => {
         setFriends(prev => prev.map(f => f.id === String(friendId) ? { ...f, isTyping } : f));
-        if (liveText !== undefined && (window as any).__inboxSetLiveTyping) {
-          (window as any).__inboxSetLiveTyping(String(friendId), liveText);
+        if ((window as any).__inboxSetLiveTyping) {
+          (window as any).__inboxSetLiveTyping(String(friendId), liveText ?? '', isTyping);
         }
       },
 
@@ -318,6 +344,8 @@ export default function App() {
 
         if (callPayload.type === 'answer' && peerConnectionRef.current) {
           await peerConnectionRef.current.setRemoteDescription(callPayload.signal);
+          // ── Quand la réponse arrive, l'appel est actif côté appelant ──
+          window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'call_accepted' } }));
         }
 
         if (callPayload.type === 'ice-candidate' && peerConnectionRef.current) {
@@ -669,16 +697,6 @@ export default function App() {
     await setupWebRtc(friendId, mode);
   }, [setupWebRtc]);
 
-  const handleEndCall = useCallback(() => {
-    peerConnectionRef.current?.close();
-    peerConnectionRef.current = null;
-    localStreamRef.current?.getTracks().forEach(track => track.stop());
-    localStreamRef.current = null;
-    currentCallRef.current = null;
-    pendingCallRef.current = null;
-    setActiveCall(null);
-  }, []);
-
   const handleSendFriendRequest = async (friendId: string) => {
     setFriends(prev => prev.map(f => f.id === friendId ? { ...f, status: 'pending_sent' } : f));
     playPusherPing();
@@ -737,9 +755,6 @@ export default function App() {
 
   return (
     <>
-      {/* ✅ FIX CRITIQUE : AuthView toujours dans le DOM — jamais démontée brutalement.
-          On la cache avec display:none quand l'utilisateur est connecté.
-          Framer Motion ne peut plus crasher sur removeChild car les nœuds restent en place. */}
       <div style={{ display: user ? 'none' : 'block' }}>
         <AuthView onAuthSuccess={(authenticatedUser) => {
           localStorage.setItem('spirittalk_user', JSON.stringify(authenticatedUser));
@@ -747,7 +762,6 @@ export default function App() {
         }} />
       </div>
 
-      {/* ✅ App principale : cachée tant que l'utilisateur n'est pas connecté */}
       <div style={{ display: user ? 'block' : 'none' }}>
         <div className="min-h-screen bg-cream-base dark:bg-charcoal-dark text-slate-800 dark:text-cream-base flex flex-col md:flex-row transition-colors duration-300">
           <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
