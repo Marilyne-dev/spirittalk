@@ -828,63 +828,18 @@ export default function App() {
     setActiveCall(null);
   }, []);
 
-  const handleSendFriendRequest = async (friendId: string) => {
-    setFriends(prev => prev.map(f => {
-      if (f.id === friendId) {
-        return { ...f, status: 'pending_sent' };
-      }
-      return f;
-    }));
+ const handleSendFriendRequest = async (friendId: string) => {
+  setFriends(prev => prev.map(f =>
+    f.id === friendId ? { ...f, status: 'pending_sent' } : f
+  ));
+  playPusherPing();
 
-    // Play a sending chime
-    playPusherPing();
-
-    try {
-      await apiService.sendFriendRequest(friendId);
-
-      // Auto-approve after 3.5 seconds to simulate other user accepting and notify
-      setTimeout(async () => {
-        try {
-          await apiService.acceptFriendRequest(friendId);
-        } catch (err) {
-          console.warn("Could not auto-accept friendship on backend", err);
-        }
-
-        setFriends(prev => prev.map(f => {
-          if (f.id === friendId) {
-            return { ...f, status: 'accepted', isOnline: true };
-          }
-          return f;
-        }));
-
-        // Play double-tone notification sound for the accepted friend
-        playPusherPing();
-
-        // Retrieve name from the fresh state
-        setFriends(currentFriends => {
-          const acceptedFriend = currentFriends.find(f => f.id === friendId);
-          const name = acceptedFriend ? acceptedFriend.name : 'Un fidèle';
-
-          const newNotif: SpiritNotification = {
-            id: `notif_accept_auto_${Date.now()}`,
-            title: "Fraternité acceptée ! 🤝",
-            description: `Vous avez un ami qui vous a accepté : ${name} est maintenant connecté avec vous. Vous pouvez communiquer !`,
-            time: "À l'instant",
-            isRead: false,
-            type: 'friend_accept'
-          };
-
-          setNotifications(prev => [newNotif, ...prev]);
-          return currentFriends;
-        });
-
-        handleAddXP(40);
-      }, 3500);
-
-    } catch (e) {
-      console.warn("Failed to send friend request on backend", e);
-    }
-  };
+  try {
+    await apiService.sendFriendRequest(friendId);
+  } catch (e) {
+    console.warn("Failed to send friend request on backend", e);
+  }
+};
 
   const handleAcceptFriendRequest = async (friendId: string) => {
     setFriends(prev => prev.map(f => {

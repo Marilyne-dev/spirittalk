@@ -55,7 +55,7 @@ export default function QuizModal({ isOpen, onClose, onQuizComplete }: QuizModal
   };
 
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       <div id="quiz-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
