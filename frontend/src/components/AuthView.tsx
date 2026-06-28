@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { 
   Mail, Lock, User as UserIcon, BookOpen, Sparkles, Moon, Sun, 
   ChevronRight, Eye, EyeOff, Book, Flame, HelpCircle, Heart, 
@@ -16,37 +16,37 @@ interface AuthViewProps {
 // Slidshow Slides (Tranquil nature photos + sacred verses from both faiths)
 const SLIDESHOW_ITEMS = [
   {
-    image: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1200", // Calm beach sunset
+    image: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1200",
     text: "Le Seigneur est mon berger, je ne manquerai de rien. Il me fait reposer dans de verts pâturages.",
     reference: "Psaumes 23:1-2",
     source: "Bible"
   },
   {
-    image: "https://images.unsplash.com/photo-1433832597046-4f10e10ac764?q=80&w=1200", // Peaceful starry night
+    image: "https://images.unsplash.com/photo-1433832597046-4f10e10ac764?q=80&w=1200",
     text: "Certes, c'est par l'évocation d'Allah que les cœurs se tranquillisent.",
     reference: "Sourate Ar-Ra'd (13:28)",
     source: "Coran"
   },
   {
-    image: "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?q=80&w=1200", // Foggy tranquil forest
+    image: "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?q=80&w=1200",
     text: "Je vous laisse la paix, je vous donne ma paix. Que votre cœur ne se trouble point, et ne s'alarme point.",
     reference: "Jean 14:27",
     source: "Bible"
   },
   {
-    image: "https://images.unsplash.com/photo-1518495973542-4542c06a5843?q=80&w=1200", // Sunbeam through trees
+    image: "https://images.unsplash.com/photo-1518495973542-4542c06a5843?q=80&w=1200",
     text: "Et quiconque place sa confiance en Allah, Il lui suffit.",
     reference: "Sourate At-Talaq (65:3)",
     source: "Coran"
   },
   {
-    image: "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?q=80&w=1200", // Misty mountain sunrise
+    image: "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?q=80&w=1200",
     text: "Mais le fruit de l'Esprit, c'est l'amour, la joie, la paix, la patience, la bonté, la bienveillance...",
     reference: "Galates 5:22",
     source: "Bible"
   },
   {
-    image: "https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=1200", // Serene hills at dawn
+    image: "https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=1200",
     text: "Allah est la Lumière des cieux et de la terre.",
     reference: "Sourate An-Nur (24:35)",
     source: "Coran"
@@ -201,7 +201,7 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
       {/* Main Sections Wrapper */}
       <div className="relative z-10 flex-grow">
         
-        {/* SECTION 1: ACCUEIL & SPLIT LOGIN SCREEN (Directly matching user image 2) */}
+        {/* SECTION 1: ACCUEIL & SPLIT LOGIN SCREEN */}
         <section ref={accueilRef} className="min-h-[calc(100vh-80px)] grid grid-cols-1 lg:grid-cols-12 overflow-hidden border-b border-cream-darker">
           
           {/* Left Hand Column: Login & Registration form */}
@@ -264,100 +264,100 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
 
               {/* Interactive Form */}
               <form onSubmit={handleSubmit} className="space-y-4">
-                <AnimatePresence mode="wait">
-                  {!isLogin && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.3 }}
-                      className="space-y-4 overflow-hidden"
-                    >
-                      {/* Name field */}
-                      <div className="space-y-1">
-                        <label className="text-[10px] uppercase font-extrabold tracking-widest text-slate-400 block">
-                          Nom Complet
-                        </label>
-                        <div className="relative">
-                          <UserIcon className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400" />
-                          <input
-                            type="text"
-                            required={!isLogin}
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            placeholder="Marie Diallo"
-                            className="w-full bg-cream-base/50 border border-cream-darker rounded-xl pl-11 pr-4 py-3.5 text-xs focus:ring-1 focus:ring-emerald-medium text-[#1E293B] focus:outline-none"
-                          />
-                        </div>
-                      </div>
 
-                      {/* Username field */}
-                      <div className="space-y-1">
-                        <label className="text-[10px] uppercase font-extrabold tracking-widest text-slate-400 block">
-                          Identifiant Unique
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3.5 top-3.5 text-slate-400 text-xs font-bold">@</span>
-                          <input
-                            type="text"
-                            required={!isLogin}
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
-                            placeholder="mariediallo"
-                            className="w-full bg-cream-base/50 border border-cream-darker rounded-xl pl-8 pr-4 py-3.5 text-xs focus:ring-1 focus:ring-emerald-medium text-[#1E293B] focus:outline-none font-mono"
-                          />
-                        </div>
-                      </div>
+                {/* ✅ CORRECTION : Plus d'AnimatePresence — transition CSS pure */}
+                <div
+                  className="space-y-4 overflow-hidden"
+                  style={{
+                    maxHeight: isLogin ? '0px' : '700px',
+                    opacity: isLogin ? 0 : 1,
+                    pointerEvents: isLogin ? 'none' : 'auto',
+                    transition: 'max-height 0.4s ease, opacity 0.3s ease',
+                  }}
+                >
+                  {/* Name field */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-extrabold tracking-widest text-slate-400 block">
+                      Nom Complet
+                    </label>
+                    <div className="relative">
+                      <UserIcon className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        required={!isLogin}
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Marie Diallo"
+                        className="w-full bg-cream-base/50 border border-cream-darker rounded-xl pl-11 pr-4 py-3.5 text-xs focus:ring-1 focus:ring-emerald-medium text-[#1E293B] focus:outline-none"
+                      />
+                    </div>
+                  </div>
 
-                      {/* Religion/Space Selector */}
-                      <div className="space-y-2">
-                        <label className="text-[10px] uppercase font-extrabold tracking-widest text-slate-400 block">
-                          Sensibilité Théologique Principale
-                        </label>
-                        <div className="grid grid-cols-3 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setReligion('Chrétienne')}
-                            className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
-                              religion === 'Chrétienne'
-                                ? 'bg-emerald-medium/10 border-emerald-medium text-emerald-deep font-bold'
-                                : 'bg-cream-base/30 border-cream-darker text-slate-400 hover:text-slate-600'
-                            }`}
-                          >
-                            <BookOpen className="w-4 h-4" />
-                            <span className="text-[9px] uppercase font-extrabold tracking-wider">Chrétienne</span>
-                          </button>
+                  {/* Username field */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-extrabold tracking-widest text-slate-400 block">
+                      Identifiant Unique
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-3.5 text-slate-400 text-xs font-bold">@</span>
+                      <input
+                        type="text"
+                        required={!isLogin}
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
+                        placeholder="mariediallo"
+                        className="w-full bg-cream-base/50 border border-cream-darker rounded-xl pl-8 pr-4 py-3.5 text-xs focus:ring-1 focus:ring-emerald-medium text-[#1E293B] focus:outline-none font-mono"
+                      />
+                    </div>
+                  </div>
 
-                          <button
-                            type="button"
-                            onClick={() => setReligion('Musulmane')}
-                            className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
-                              religion === 'Musulmane'
-                                ? 'bg-gold-deep/10 border-gold-deep text-gold-deep font-bold'
-                                : 'bg-cream-base/30 border-cream-darker text-slate-400 hover:text-slate-600'
-                            }`}
-                          >
-                            <Moon className="w-4 h-4" />
-                            <span className="text-[9px] uppercase font-extrabold tracking-wider">Musulmane</span>
-                          </button>
+                  {/* Religion/Space Selector */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] uppercase font-extrabold tracking-widest text-slate-400 block">
+                      Sensibilité Théologique Principale
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setReligion('Chrétienne')}
+                        className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
+                          religion === 'Chrétienne'
+                            ? 'bg-emerald-medium/10 border-emerald-medium text-emerald-deep font-bold'
+                            : 'bg-cream-base/30 border-cream-darker text-slate-400 hover:text-slate-600'
+                        }`}
+                      >
+                        <BookOpen className="w-4 h-4" />
+                        <span className="text-[9px] uppercase font-extrabold tracking-wider">Chrétienne</span>
+                      </button>
 
-                          <button
-                            type="button"
-                            onClick={() => setReligion('Mixte')}
-                            className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
-                              religion === 'Mixte'
-                                ? 'bg-[#759486]/10 border-[#759486] text-[#0d2b21] font-bold'
-                                : 'bg-cream-base/30 border-cream-darker text-slate-400 hover:text-slate-600'
-                            }`}
-                          >
-                            <Sparkles className="w-4 h-4" />
-                            <span className="text-[9px] uppercase font-extrabold tracking-wider">Double Espace</span>
-                          </button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                      <button
+                        type="button"
+                        onClick={() => setReligion('Musulmane')}
+                        className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
+                          religion === 'Musulmane'
+                            ? 'bg-gold-deep/10 border-gold-deep text-gold-deep font-bold'
+                            : 'bg-cream-base/30 border-cream-darker text-slate-400 hover:text-slate-600'
+                        }`}
+                      >
+                        <Moon className="w-4 h-4" />
+                        <span className="text-[9px] uppercase font-extrabold tracking-wider">Musulmane</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setReligion('Mixte')}
+                        className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
+                          religion === 'Mixte'
+                            ? 'bg-[#759486]/10 border-[#759486] text-[#0d2b21] font-bold'
+                            : 'bg-cream-base/30 border-cream-darker text-slate-400 hover:text-slate-600'
+                        }`}
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        <span className="text-[9px] uppercase font-extrabold tracking-wider">Double Espace</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Email Address */}
                 <div className="space-y-1">
@@ -435,7 +435,7 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
           {/* Right Hand Column: Scenic Slideshow with automated quote transitions */}
           <div className="lg:col-span-7 relative h-80 lg:h-auto overflow-hidden flex flex-col justify-end p-8 md:p-12 xl:p-16">
             
-            {/* ✅ FIX : transition CSS pure au lieu d'AnimatePresence (évite removeChild crash) */}
+            {/* Transition CSS pure pour les slides */}
             {SLIDESHOW_ITEMS.map((item, idx) => (
               <div
                 key={idx}
@@ -471,7 +471,7 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
                 <span className="text-[10px] text-white/60 tracking-wider uppercase font-bold">Inspiration Universelle</span>
               </div>
 
-              {/* ✅ FIX : transition CSS pure pour le texte du verset */}
+              {/* Transition CSS pure pour le texte du verset */}
               <div className="relative" style={{ minHeight: '6rem' }}>
                 {SLIDESHOW_ITEMS.map((item, idx) => (
                   <blockquote
@@ -488,7 +488,7 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
                 ))}
               </div>
 
-              {/* ✅ FIX : transition CSS pour la référence */}
+              {/* Transition CSS pour la référence */}
               <div className="relative" style={{ minHeight: '1.5rem' }}>
                 {SLIDESHOW_ITEMS.map((item, idx) => (
                   <cite
@@ -522,7 +522,7 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
           </div>
         </section>
 
-        {/* SECTION 2: LES FONCTIONNALITÉS (Animated and Explained Space by Space) */}
+        {/* SECTION 2: LES FONCTIONNALITÉS */}
         <section ref={featuresRef} className="py-24 bg-white border-b border-cream-darker scroll-mt-20">
           <div className="max-w-7xl mx-auto px-6 md:px-12 space-y-16">
             
@@ -696,7 +696,7 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
           </div>
         </section>
 
-        {/* SECTION 3: POURQUOI NOUS ? (Value proposition, ecumenical design, Christians & Muslims) */}
+        {/* SECTION 3: POURQUOI NOUS ? */}
         <section ref={whyUsRef} className="py-24 bg-[#FDFBF7] border-b border-cream-darker scroll-mt-20">
           <div className="max-w-7xl mx-auto px-6 md:px-12 space-y-16">
             
@@ -722,7 +722,6 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
             {/* Editorial Columns */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               
-              {/* Point 1: Two Faiths, One Respect */}
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -738,7 +737,6 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
                 </p>
               </motion.div>
 
-              {/* Point 2: Zero Ad, Offline First & Privacy */}
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -754,7 +752,6 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
                 </p>
               </motion.div>
 
-              {/* Point 3: Live API & Intelligent Search */}
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -898,7 +895,6 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
           </div>
         </section>
 
-
       </div>
 
       {/* FOOTER */}
@@ -915,42 +911,42 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
         </div>
       </footer>
 
-      {/* Contact Success Overlay */}
-      <AnimatePresence>
-        {showContactSuccess && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      {/* ✅ CORRECTION : Contact Success Overlay — plus d'AnimatePresence, transition CSS pure */}
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        style={{
+          opacity: showContactSuccess ? 1 : 0,
+          pointerEvents: showContactSuccess ? 'auto' : 'none',
+          transition: 'opacity 0.3s ease',
+        }}
+      >
+        <div
+          className="bg-white rounded-3xl p-8 max-w-md w-full text-center border border-cream-darker shadow-2xl space-y-6"
+          style={{
+            transform: showContactSuccess ? 'scale(1) translateY(0)' : 'scale(0.9) translateY(20px)',
+            opacity: showContactSuccess ? 1 : 0,
+            transition: 'transform 0.3s ease, opacity 0.3s ease',
+          }}
+        >
+          <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center text-green-600 mx-auto">
+            <Check className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="font-serif text-2xl font-bold text-emerald-deep">Message Reçu en Paix</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Votre message a bien été envoyé au support de SpiritTalk. Nos modérateurs et guides de paix vous répondront par email sous un délai de 24h. Que la bénédiction vous accompagne !
+            </p>
+          </div>
+
+          <button
+            onClick={() => setShowContactSuccess(false)}
+            className="w-full py-3 bg-emerald-deep text-white text-xs uppercase tracking-widest font-bold rounded-xl hover:bg-emerald-medium transition-colors"
           >
-            <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="bg-white rounded-3xl p-8 max-w-md w-full text-center border border-cream-darker shadow-2xl space-y-6"
-            >
-              <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center text-green-600 mx-auto">
-                <Check className="w-8 h-8" />
-              </div>
-
-              <div className="space-y-2">
-                <h3 className="font-serif text-2xl font-bold text-emerald-deep">Message Reçu en Paix</h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Votre message a bien été envoyé au support de SpiritTalk. Nos modérateurs et guides de paix vous répondront par email sous un délai de 24h. Que la bénédiction vous accompagne !
-                </p>
-              </div>
-
-              <button
-                onClick={() => setShowContactSuccess(false)}
-                className="w-full py-3 bg-emerald-deep text-white text-xs uppercase tracking-widest font-bold rounded-xl hover:bg-emerald-medium transition-colors"
-              >
-                Fermer
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            Fermer
+          </button>
+        </div>
+      </div>
 
     </div>
   );
