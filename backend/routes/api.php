@@ -45,3 +45,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/reading-plans', [ReadingPlanController::class, 'index']);
     Route::post('/reading-progress', [ReadingPlanController::class, 'updateProgress']);
 });
+
+Route::get('/test-final', function() { return 'ok'; });
