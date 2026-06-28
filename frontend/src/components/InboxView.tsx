@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Mic, Square, Play, Image as ImageIcon, Send, Users, Sparkles, 
-  Phone, Video, Volume2, Check, CheckCheck, ChevronLeft
+  Phone, Video, Volume2, Check, CheckCheck, ChevronLeft,
+  PhoneOff, PhoneCall, VideoIcon, MicOff, X
 } from 'lucide-react';
 import { Friend, DirectMessage } from '../types';
 import { apiService } from '../services/api';
@@ -18,6 +19,9 @@ interface InboxViewProps {
   onStartCall: (recipientId: string, mode: 'audio' | 'video') => void;
 }
 
+// ─── Constante API ────────────────────────────────────────────────────────────
+const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://marilyne.alwaysdata.net/spirittalk';
+
 export default function InboxView({
   user,
   friends,
@@ -31,32 +35,33 @@ export default function InboxView({
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
-
-  // Typing en direct : texte live reçu de l'autre (lettre par lettre via Pusher)
   const [liveTypingText, setLiveTypingText] = useState<string>('');
 
   // Audio Recorder
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
-  const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
+
+  // ─── État appel actif affiché dans InboxView ──────────────────────────────
+  const [activeCallFriendId, setActiveCallFriendId] = useState<string | null>(null);
+  const [activeCallMode, setActiveCallMode] = useState<'audio' | 'video'>('audio');
+  const [callStatus, setCallStatus] = useState<'calling' | 'active' | null>(null);
+  const [callDurationSec, setCallDurationSec] = useState(0);
+  const callDurationRef = useRef<NodeJS.Timeout | null>(null);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  // ✅ FIX BUG 2 : on garde une ref sur le stream pour y accéder dans onstop
   const streamRef = useRef<MediaStream | null>(null);
-  const recordingSecondsRef = useRef<number>(0); // ref pour capturer la durée dans onstop
+  const recordingSecondsRef = useRef<number>(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Typing debounce
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const selectedFriend = friends.find(f => f.id === selectedFriendId);
 
-  // ✅ FIX BUG 1 : scroll déclenché sur messages.length pour capter les nouveaux msgs Pusher
+  // ─── FIX 1 : scroll chaque fois que messages change OU qu'un ami est sélectionné ──
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length, selectedFriendId, liveTypingText]);
+    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 80);
+  }, [messages, selectedFriendId, liveTypingText]);
 
   // Quand on ouvre une conversation → marquer comme lu
   useEffect(() => {
@@ -66,14 +71,14 @@ export default function InboxView({
     setLiveTypingText('');
   }, [selectedFriendId]);
 
-  // Timer enregistrement audio — on synchronise aussi la ref
+  // Timer enregistrement
   useEffect(() => {
     if (isRecording) {
       recordingSecondsRef.current = 0;
       timerRef.current = setInterval(() => {
         setRecordingSeconds(s => {
           const next = s + 1;
-          recordingSecondsRef.current = next; // ✅ toujours à jour dans les closures
+          recordingSecondsRef.current = next;
           return next;
         });
       }, 1000);
@@ -83,7 +88,18 @@ export default function InboxView({
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isRecording]);
 
-  // Écouter les événements Pusher pour le typing lettre par lettre
+  // Timer durée d'appel
+  useEffect(() => {
+    if (callStatus === 'active') {
+      setCallDurationSec(0);
+      callDurationRef.current = setInterval(() => setCallDurationSec(s => s + 1), 1000);
+    } else {
+      if (callDurationRef.current) clearInterval(callDurationRef.current);
+    }
+    return () => { if (callDurationRef.current) clearInterval(callDurationRef.current); };
+  }, [callStatus]);
+
+  // Écouter les events Pusher pour le typing lettre par lettre
   useEffect(() => {
     (window as any).__inboxSetLiveTyping = (senderId: string, text: string) => {
       if (senderId === selectedFriendId) {
@@ -92,98 +108,139 @@ export default function InboxView({
         (window as any).__liveTypingClear = setTimeout(() => setLiveTypingText(''), 3000);
       }
     };
-    return () => {
-      delete (window as any).__inboxSetLiveTyping;
-    };
+    return () => { delete (window as any).__inboxSetLiveTyping; };
   }, [selectedFriendId]);
 
-  // Envoyer le texte en cours de frappe au backend (lettre par lettre)
-  const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setInputText(val);
+  // ─── FIX 2 (appels) : écouter l'acceptation de l'appel depuis App.tsx ──────
+  // App.tsx met activeCall quand l'appel est accepté — on écoute via un événement custom
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (e.detail?.type === 'call_accepted') {
+        setCallStatus('active');
+      }
+      if (e.detail?.type === 'call_ended') {
+        setCallStatus(null);
+        setActiveCallFriendId(null);
+        if (callDurationRef.current) clearInterval(callDurationRef.current);
+      }
+    };
+    window.addEventListener('spirittalk_call_event', handler);
+    return () => window.removeEventListener('spirittalk_call_event', handler);
+  }, []);
 
-    if (!selectedFriendId) return;
-
-    try {
-      await fetch(`${(import.meta as any).env?.VITE_API_URL || 'https://marilyne.alwaysdata.net/spirittalk'}/api/direct-messages/typing`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('spirittalk_token') || ''}`
-        },
-        body: JSON.stringify({
-          recipient_id: selectedFriendId,
-          is_typing: val.length > 0,
-          live_text: val
-        })
-      });
-    } catch {}
-
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      apiService.sendTypingStatus(selectedFriendId, false).catch(() => {});
-    }, 2000);
+  // ─── Lancer un appel ─────────────────────────────────────────────────────
+  const handleStartCallLocal = (friendId: string, mode: 'audio' | 'video') => {
+    setActiveCallFriendId(friendId);
+    setActiveCallMode(mode);
+    setCallStatus('calling');
+    setCallDurationSec(0);
+    // Appel la fonction WebRTC du parent (App.tsx)
+    onStartCall(friendId, mode);
   };
 
-  // ✅ FIX BUG 2 — startRecording : stocker le stream dans une ref
-  const startRecording = async () => {
-    setRecordingSeconds(0);
-    recordingSecondsRef.current = 0;
-    setRecordedAudioUrl(null);
-    audioChunksRef.current = [];
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream; // ✅ stocker le stream pour y accéder dans onstop
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-      // ✅ NE PAS définir onstop ici — on le fait dans stopRecordingAndSend
-      //    pour capturer la durée exacte au moment de l'arrêt
-      mediaRecorder.start();
-      setIsRecording(true);
-    } catch {
-      // Fallback si le micro est bloqué
-      setIsRecording(true);
-    }
-  };
-
-  // ✅ FIX BUG 2 — stopRecordingAndSend : brancher onstop AVANT d'appeler stop()
-  //    pour garantir que l'URL blob est dispo avant d'envoyer
-  const stopRecordingAndSend = () => {
-    if (!isRecording) return;
-    setIsRecording(false);
-
-    const mr = mediaRecorderRef.current;
-    if (mr && mr.state !== 'inactive') {
-      // Capturer la durée maintenant (la ref est toujours à jour)
-      const durationAtStop = recordingSecondsRef.current;
-
-      // ✅ Définir onstop ICI pour avoir accès à durationAtStop et streamRef
-      mr.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
-        const url = URL.createObjectURL(blob);
-        setRecordedAudioUrl(url);
-        // Libérer le micro
-        streamRef.current?.getTracks().forEach(t => t.stop());
-        streamRef.current = null;
-        // ✅ Envoyer avec l'URL réelle, jamais null
-        handleSendVoice(url, formatDuration(durationAtStop));
-      };
-
-      mr.stop(); // ← déclenche onstop après la fin de collecte des chunks
-    } else {
-      // Fallback micro indisponible
-      handleSendVoice('mock-audio', formatDuration(recordingSecondsRef.current || 4));
-    }
+  // ─── Raccrocher ──────────────────────────────────────────────────────────
+  const handleEndCallLocal = () => {
+    setCallStatus(null);
+    setActiveCallFriendId(null);
+    // Envoie l'event pour que App.tsx coupe aussi la connexion WebRTC
+    window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'hang_up' } }));
   };
 
   const formatDuration = (sec: number) => {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
     return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  // ─── Envoi texte ─────────────────────────────────────────────────────────
+  const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setInputText(val);
+    if (!selectedFriendId) return;
+    try {
+      await fetch(`${API_BASE}/api/direct-messages/typing`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('spirittalk_token') || ''}`
+        },
+        body: JSON.stringify({ recipient_id: selectedFriendId, is_typing: val.length > 0, live_text: val })
+      });
+    } catch {}
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      apiService.sendTypingStatus(selectedFriendId, false).catch(() => {});
+    }, 2000);
+  };
+
+  // ─── Enregistrement audio ────────────────────────────────────────────────
+  const startRecording = async () => {
+    setRecordingSeconds(0);
+    recordingSecondsRef.current = 0;
+    audioChunksRef.current = [];
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch {
+      setIsRecording(true);
+    }
+  };
+
+  // ─── FIX AUDIO : upload vers le serveur avant d'envoyer ─────────────────
+  const stopRecordingAndSend = () => {
+    if (!isRecording) return;
+    setIsRecording(false);
+
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== 'inactive') {
+      const durationAtStop = recordingSecondsRef.current;
+      mr.onstop = async () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        streamRef.current?.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+
+        // ── Essayer d'uploader l'audio au serveur ──────────────────────────
+        let audioUrl: string = '';
+        try {
+          const formData = new FormData();
+          formData.append('audio', blob, `voice_${Date.now()}.webm`);
+          const token = localStorage.getItem('spirittalk_token') || '';
+          const res = await fetch(`${API_BASE}/api/upload-audio`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData
+          });
+          if (res.ok) {
+            const data = await res.json();
+            audioUrl = data.url || data.path || '';
+          }
+        } catch {}
+
+        // ── Fallback : si upload échoué, convertir en base64 ──────────────
+        // Le base64 est stocké localement (visible seulement si même session)
+        // mais c'est mieux que rien
+        if (!audioUrl) {
+          audioUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+        }
+
+        handleSendVoice(audioUrl, formatDuration(durationAtStop));
+      };
+      mr.stop();
+    } else {
+      handleSendVoice('mock-audio', formatDuration(recordingSecondsRef.current || 4));
+    }
   };
 
   const handleSendVoice = (audioUrl: string, dur: string) => {
@@ -212,15 +269,66 @@ export default function InboxView({
     });
   };
 
-  const activeMessages = messages.filter(
-    m => (m.senderId === 'me' && m.recipientId === selectedFriendId) ||
-         (m.senderId === selectedFriendId && m.recipientId === 'me')
-  );
+  // ─── FIX 1 : filtrage messages corrigé ───────────────────────────────────
+  // Pusher met recipientId='me' côté destinataire, senderId=friendId
+  // On doit matcher les deux sens correctement
+  const activeMessages = messages.filter(m => {
+    const isSent = m.senderId === 'me' && m.recipientId === selectedFriendId;
+    const isReceived = m.senderId === selectedFriendId && (m.recipientId === 'me' || m.recipientId === String(user?.id));
+    return isSent || isReceived;
+  });
 
   const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
 
+  const callFriend = activeCallFriendId ? friends.find(f => f.id === activeCallFriendId) : null;
+
   return (
-    <div className="h-[70vh] bg-white dark:bg-charcoal-card border border-cream-darker dark:border-charcoal-light/10 rounded-3xl shadow-sm overflow-hidden flex">
+    <div className="h-[70vh] bg-white dark:bg-charcoal-card border border-cream-darker dark:border-charcoal-light/10 rounded-3xl shadow-sm overflow-hidden flex relative">
+
+      {/* ─── OVERLAY APPEL ACTIF ──────────────────────────────────────────── */}
+      {callStatus && callFriend && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#0d2b21]/95 backdrop-blur-sm">
+          <div className="text-center text-white space-y-6 px-8 w-full max-w-sm">
+            {/* Avatar */}
+            <div className="relative mx-auto w-24 h-24">
+              <img
+                src={callFriend.avatar}
+                alt={callFriend.name}
+                className="w-24 h-24 rounded-full object-cover border-4 border-emerald-medium/40 mx-auto"
+              />
+              {callStatus === 'calling' && (
+                <span className="absolute inset-0 rounded-full border-4 border-emerald-medium/30 animate-ping" />
+              )}
+            </div>
+
+            {/* Nom + statut */}
+            <div>
+              <p className="text-[11px] uppercase tracking-widest text-emerald-light font-bold mb-1">
+                {activeCallMode === 'video' ? '📹 Appel vidéo' : '📞 Appel audio'}
+              </p>
+              <h3 className="font-serif text-2xl font-bold">{callFriend.name}</h3>
+              <p className="text-sm text-white/60 mt-1">
+                {callStatus === 'calling'
+                  ? 'Appel en cours...'
+                  : `En communication • ${formatDuration(callDurationSec)}`}
+              </p>
+            </div>
+
+            {/* Boutons */}
+            <div className="flex justify-center gap-8">
+              <div className="flex flex-col items-center gap-2">
+                <button
+                  onClick={handleEndCallLocal}
+                  className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center active:scale-95 transition-all shadow-lg"
+                >
+                  <PhoneOff className="w-7 h-7" />
+                </button>
+                <span className="text-[10px] uppercase tracking-wide text-white/60">Raccrocher</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sidebar amis */}
       <div className={`w-full md:w-80 border-r border-cream-darker dark:border-charcoal-light/10 flex flex-col bg-slate-50/50 dark:bg-charcoal-dark/20 ${selectedFriendId ? 'hidden md:flex' : 'flex'}`}>
@@ -241,7 +349,7 @@ export default function InboxView({
           {friends.filter(f => f.status === 'accepted').map((friend) => {
             const lastMsg = messages.filter(
               m => (m.senderId === 'me' && m.recipientId === friend.id) ||
-                   (m.senderId === friend.id && m.recipientId === 'me')
+                   (m.senderId === friend.id && (m.recipientId === 'me' || m.recipientId === String(user?.id)))
             ).slice(-1)[0];
 
             const unread = unreadCounts[friend.id] || 0;
@@ -345,10 +453,18 @@ export default function InboxView({
             </div>
 
             <div className="flex gap-2">
-              <button onClick={() => onStartCall(selectedFriend.id, 'audio')} className="p-2 hover:bg-slate-100 dark:hover:bg-charcoal-light/30 rounded-xl text-slate-400 hover:text-emerald-medium">
+              <button
+                onClick={() => handleStartCallLocal(selectedFriend.id, 'audio')}
+                className="p-2 hover:bg-slate-100 dark:hover:bg-charcoal-light/30 rounded-xl text-slate-400 hover:text-emerald-medium"
+                title="Appel audio"
+              >
                 <Phone className="w-4 h-4" />
               </button>
-              <button onClick={() => onStartCall(selectedFriend.id, 'video')} className="p-2 hover:bg-slate-100 dark:hover:bg-charcoal-light/30 rounded-xl text-slate-400 hover:text-emerald-medium">
+              <button
+                onClick={() => handleStartCallLocal(selectedFriend.id, 'video')}
+                className="p-2 hover:bg-slate-100 dark:hover:bg-charcoal-light/30 rounded-xl text-slate-400 hover:text-emerald-medium"
+                title="Appel vidéo"
+              >
                 <Video className="w-4 h-4" />
               </button>
             </div>
@@ -382,17 +498,12 @@ export default function InboxView({
                       <div className={`flex items-center gap-3 p-2 rounded-xl border ${isMe ? 'bg-white/10 border-white/20 text-white' : 'bg-emerald-medium/10 border-emerald-medium/10 text-emerald-deep dark:text-cream-base'}`}>
                         <button
                           onClick={() => {
-                            // ✅ FIX BUG 2 : jouer le vrai enregistrement, JAMAIS la voix IA
-                            // On joue le blob URL directement si disponible
-                            // On ne tombe JAMAIS dans speechSynthesis
                             if (msg.audioUrl && msg.audioUrl !== 'mock-audio') {
                               const audio = new Audio(msg.audioUrl);
                               audio.play().catch(() => {
-                                // Si le blob URL est expiré (session précédente), afficher message
-                                alert('Cet enregistrement audio n\'est plus disponible.');
+                                alert('Enregistrement audio non disponible.');
                               });
                             } else {
-                              // mock-audio = micro indisponible au moment de l'enregistrement
                               alert('Cet enregistrement n\'a pas pu être capturé (micro indisponible).');
                             }
                           }}
@@ -429,7 +540,7 @@ export default function InboxView({
               );
             })}
 
-            {/* Typing indicator : texte en direct lettre par lettre */}
+            {/* Typing indicator */}
             {(selectedFriend.isTyping || liveTypingText) && (
               <div className="flex justify-start">
                 <div className="bg-white dark:bg-charcoal-dark border border-cream-darker dark:border-charcoal-light/10 rounded-2xl rounded-tl-none p-3 text-xs max-w-[75%]">
