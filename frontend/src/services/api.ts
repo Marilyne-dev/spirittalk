@@ -51,32 +51,9 @@ export const apiService = {
         localStorage.setItem('spirittalk_user', JSON.stringify(data.user));
       }
       return data;
-    } catch (error) {
-      console.warn("Laravel Backend Login failed, using local simulation", error);
-      // Try to find the user in our local simulated registry!
-      const currentSimulatedStr = localStorage.getItem('spirittalk_simulated_users');
-      const currentSimulated = currentSimulatedStr ? JSON.parse(currentSimulatedStr) : [];
-      const existingUser = currentSimulated.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
-      
-      const mockUser = existingUser || {
-        id: Date.now(),
-        name: email.split('@')[0], // Use email prefix instead of hardcoding "Seeker"!
-        username: email.split('@')[0].toLowerCase().replace(/\s+/g, ''),
-        email: email,
-        religion: 'Mixte',
-        avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200',
-        level: 'Explorateur Sage',
-        xp_points: 1200
-      };
-
-      if (!existingUser) {
-        currentSimulated.push(mockUser);
-        localStorage.setItem('spirittalk_simulated_users', JSON.stringify(currentSimulated));
-      }
-
-      localStorage.setItem('spirittalk_token', 'mock_token_123456');
-      localStorage.setItem('spirittalk_user', JSON.stringify(mockUser));
-      return { token: 'mock_token_123456', user: mockUser };
+    } catch (error: any) {
+      // Ne pas tomber en mode local — propager l'erreur pour afficher le vrai message
+      throw error;
     }
   },
 
@@ -107,34 +84,9 @@ export const apiService = {
         localStorage.setItem('spirittalk_user', JSON.stringify(data.user));
       }
       return data;
-    } catch (error) {
-      console.warn("Laravel Backend Register failed, using local simulation", error);
-      const mockUser = {
-        id: Date.now(),
-        name,
-        username,
-        email,
-        religion,
-        avatar: religion === 'Chrétienne' 
-          ? 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=200' 
-          : religion === 'Musulmane' 
-          ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200'
-          : 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200',
-        level: 'Explorateur',
-        xp_points: 0
-      };
-      
-      // Save to local simulated users registry!
-      const currentSimulatedStr = localStorage.getItem('spirittalk_simulated_users');
-      const currentSimulated = currentSimulatedStr ? JSON.parse(currentSimulatedStr) : [];
-      // Prevent duplicates
-      const filtered = currentSimulated.filter((u: any) => u.email.toLowerCase() !== email.toLowerCase() && u.username.toLowerCase() !== username.toLowerCase());
-      filtered.push(mockUser);
-      localStorage.setItem('spirittalk_simulated_users', JSON.stringify(filtered));
-
-      localStorage.setItem('spirittalk_token', 'mock_token_123456');
-      localStorage.setItem('spirittalk_user', JSON.stringify(mockUser));
-      return { token: 'mock_token_123456', user: mockUser };
+    } catch (error: any) {
+      // Propager l'erreur — ne pas créer de faux compte local
+      throw error;
     }
   },
 
