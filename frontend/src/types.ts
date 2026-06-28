@@ -10,7 +10,7 @@ export interface QuizQuestion {
   id: string;
   text: string;
   options: string[];
-  correctAnswer: number; // index of options
+  correctAnswer: number;
   explanation: string;
   source: string;
 }
@@ -22,7 +22,7 @@ export interface InspirationCard {
   duration: string;
   category: string;
   imageUrl: string;
-  content: string; // The reading text
+  content: string;
 }
 
 export interface Bookmark {
@@ -111,6 +111,7 @@ export interface DirectMessage {
   images?: string[];
   audioUrl?: string;
   audioDuration?: string;
+  readAt?: string | null;  // null = non lu, string = date de lecture
 }
 
 export interface Friend {

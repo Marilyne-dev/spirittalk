@@ -1,10 +1,7 @@
 import { Bookmark, Note, ReadingPlan, ChatMessage } from '../types';
 
-// The API base URL defaults to the user's Laravel backend on AlwaysData
-// Users can configure this in their .env as VITE_API_URL
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'https://marilyne.alwaysdata.net/spirittalk';
 
-// Simple helper to get headers with Sanctum token if present
 const getHeaders = () => {
   const token = localStorage.getItem('spirittalk_token');
   const headers: Record<string, string> = {
@@ -17,15 +14,9 @@ const getHeaders = () => {
   return headers;
 };
 
-/**
- * Robust API Client that communicates with the Laravel Sanctum Backend.
- * Falls back to localStorage storage if the backend is not yet accessible,
- * ensuring flawless offline-first and development mode operation.
- */
 export const apiService = {
   // --- AUTHENTICATION ---
   async login(email: string, password: string) {
-    // Vider l'ancien token avant login (évite le 401 avec un token mock/expiré)
     localStorage.removeItem('spirittalk_token');
     try {
       const response = await fetch(`${API_BASE_URL}/login`, {
@@ -42,7 +33,6 @@ export const apiService = {
       const data = await response.json();
       if (data.token) {
         localStorage.setItem('spirittalk_token', data.token);
-        // Backup to local simulated users list
         const currentSimulatedStr = localStorage.getItem('spirittalk_simulated_users');
         const currentSimulated = currentSimulatedStr ? JSON.parse(currentSimulatedStr) : [];
         const filtered = currentSimulated.filter((u: any) => u.email.toLowerCase() !== data.user.email.toLowerCase());
@@ -52,7 +42,6 @@ export const apiService = {
       }
       return data;
     } catch (error: any) {
-      // Ne pas tomber en mode local — propager l'erreur pour afficher le vrai message
       throw error;
     }
   },
@@ -75,7 +64,6 @@ export const apiService = {
       const data = await response.json();
       if (data.token) {
         localStorage.setItem('spirittalk_token', data.token);
-        // Backup to local simulated users list
         const currentSimulatedStr = localStorage.getItem('spirittalk_simulated_users');
         const currentSimulated = currentSimulatedStr ? JSON.parse(currentSimulatedStr) : [];
         const filtered = currentSimulated.filter((u: any) => u.email.toLowerCase() !== data.user.email.toLowerCase());
@@ -85,20 +73,16 @@ export const apiService = {
       }
       return data;
     } catch (error: any) {
-      // Propager l'erreur — ne pas créer de faux compte local
       throw error;
     }
   },
 
   async updateProfile(updates: { name?: string; email?: string; religion?: 'Chrétienne' | 'Musulmane' | 'Mixte'; avatar?: string }) {
-    // 1. Update localStorage spirittalk_user
     const savedUserStr = localStorage.getItem('spirittalk_user');
     const current = savedUserStr ? JSON.parse(savedUserStr) : null;
     if (current) {
       const updatedUser = { ...current, ...updates };
       localStorage.setItem('spirittalk_user', JSON.stringify(updatedUser));
-
-      // 2. Update spirittalk_simulated_users registry so it's persistent across logout/login!
       const currentSimulatedStr = localStorage.getItem('spirittalk_simulated_users');
       const currentSimulated = currentSimulatedStr ? JSON.parse(currentSimulatedStr) : [];
       const updatedList = currentSimulated.map((u: any) => {
@@ -107,7 +91,6 @@ export const apiService = {
         }
         return u;
       });
-      // Ensure if not in list, we add it
       const exists = currentSimulated.some((u: any) => u.email.toLowerCase() === current.email.toLowerCase() || u.id?.toString() === current.id?.toString());
       if (!exists) {
         updatedList.push(updatedUser);
@@ -406,7 +389,6 @@ export const apiService = {
       console.warn("Failed to fetch reading plans from Laravel backend, using simulation", error);
       const saved = localStorage.getItem('spirittalk_reading_plans');
       if (saved) return JSON.parse(saved);
-      
       const defaultPlans: ReadingPlan[] = [
         { id: 'plan_peace', title: "La Paix Intérieure", progress: 65, category: "Paix", totalChapters: 7, currentChapter: 4 },
         { id: 'plan_wisdom', title: "Sagesse des Anciens", progress: 12, category: "Sagesse", totalChapters: 10, currentChapter: 1 },
@@ -436,11 +418,7 @@ export const apiService = {
       const savedPlans = JSON.parse(localStorage.getItem('spirittalk_reading_plans') || '[]');
       const updated = savedPlans.map((p: ReadingPlan) => {
         if (p.id === planId) {
-          return {
-            ...p,
-            currentChapter: currentDay,
-            progress: percentage
-          };
+          return { ...p, currentChapter: currentDay, progress: percentage };
         }
         return p;
       });
@@ -571,6 +549,45 @@ export const apiService = {
     }
   },
 
+  // --- MESSAGERIE : LU / NON LU ---
+
+  /**
+   * Marque tous les messages d'un expéditeur comme lus.
+   * Appelé quand l'utilisateur ouvre la conversation.
+   */
+  async markMessagesAsRead(senderId: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/direct-messages/mark-read/${senderId}`, {
+        method: 'POST',
+        headers: getHeaders(),
+      });
+      if (!response.ok) throw new Error('Server returned ' + response.status);
+      return true;
+    } catch (error) {
+      console.warn("Failed to mark messages as read", error);
+      return false;
+    }
+  },
+
+  /**
+   * Retourne le nombre de messages non lus par expéditeur.
+   * Format : { [senderId: string]: number }
+   * Ex: { "3": 5, "7": 2 }
+   */
+  async getUnreadCounts(): Promise<Record<string, number>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/direct-messages/unread-counts`, {
+        method: 'GET',
+        headers: getHeaders(),
+      });
+      if (!response.ok) throw new Error('Server returned ' + response.status);
+      return await response.json();
+    } catch (error) {
+      console.warn("Failed to fetch unread counts", error);
+      return {};
+    }
+  },
+
   async getRegisteredUsers(search = ''): Promise<any[]> {
     const query = search.trim();
     const queryString = query ? `?search=${encodeURIComponent(query)}` : '';
@@ -591,13 +608,11 @@ export const apiService = {
 
       const data = await response.json();
 
-      // Le backend retourne { users: [...] }
       if (data && Array.isArray(data.users)) {
         console.log(`[getRegisteredUsers] ${data.users.length} utilisateurs reçus`);
         return data.users;
       }
 
-      // Fallback si le format est un tableau direct
       if (Array.isArray(data)) {
         console.log(`[getRegisteredUsers] ${data.length} utilisateurs reçus (tableau direct)`);
         return data;

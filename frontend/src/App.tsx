@@ -61,7 +61,7 @@ const PRE_SEEDED_POSTS: CommunityPost[] = [
         id: 'comment_1_1',
         authorName: "Amina Diop",
         authorAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200",
-        content: "Tellement vrai Samuel ! En Islam, la réconciliation et le fait de pardonner aux autres ('Al-Afx') sont également de très grandes vertus bénies par le Miséricordieux.",
+        content: "Tellement vrai Samuel ! En Islam, la réconciliation et le fait de pardonner aux autres sont également de très grandes vertus bénies par le Miséricordieux.",
         time: "Il y a 1h"
       }
     ]
@@ -78,30 +78,6 @@ const PRE_SEEDED_POSTS: CommunityPost[] = [
     time: "Il y a 4h",
     images: ["https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?auto=format&fit=crop&q=80&w=600"],
     comments: []
-  }
-];
-
-const PRE_SEEDED_DIRECT_MESSAGES: DirectMessage[] = [
-  {
-    id: 'dm_1',
-    senderId: 'friend_amina',
-    recipientId: 'me',
-    text: "As-salamu alaykum mon frère/sœur ! Comment se passe votre journée d'étude spirituelle aujourd'hui ?",
-    timestamp: "10:30"
-  },
-  {
-    id: 'dm_2',
-    senderId: 'me',
-    recipientId: 'friend_amina',
-    text: "Aleykoum salam Amina ! Très bien, je lisais justement de magnifiques passages sur la bienveillance.",
-    timestamp: "10:32"
-  },
-  {
-    id: 'dm_3',
-    senderId: 'friend_amina',
-    recipientId: 'me',
-    text: "Gloire à Dieu ! C'est si apaisant pour le cœur. N'hésite pas si tu as envie d'en discuter en vocal.",
-    timestamp: "10:35"
   }
 ];
 
@@ -154,7 +130,6 @@ export default function App() {
   const currentCallRef = useRef<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
   const pendingCallRef = useRef<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
 
-  // Community States
   const [posts, setPosts] = useState<CommunityPost[]>(() => {
     const saved = localStorage.getItem('spirittalk_posts');
     return saved ? JSON.parse(saved) : PRE_SEEDED_POSTS;
@@ -163,13 +138,12 @@ export default function App() {
   const [friends, setFriends] = useState<Friend[]>(() => {
     const saved = localStorage.getItem('spirittalk_friends');
     const parsed = saved ? JSON.parse(saved) : [];
-    // Filter out demo/mock user IDs
     return parsed.filter((f: Friend) => f.id && !f.id.toString().startsWith('friend_') && !f.id.toString().startsWith('user_'));
   });
 
   const [directMessages, setDirectMessages] = useState<DirectMessage[]>(() => {
     const saved = localStorage.getItem('spirittalk_direct_messages');
-    return saved ? JSON.parse(saved) : PRE_SEEDED_DIRECT_MESSAGES;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [notifications, setNotifications] = useState<SpiritNotification[]>(() => {
@@ -177,25 +151,20 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
-  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>(() => {
-    const saved = localStorage.getItem('spirittalk_unread_counts');
-    return saved ? JSON.parse(saved) : {};
-  });
-  
-  // Persisted Stats & Data
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+
   const [xp, setXp] = useState<number>(() => {
     const saved = localStorage.getItem('spirittalk_xp');
     return saved ? parseInt(saved, 10) : 1200;
   });
-  
+
   const [streak, setStreak] = useState<number>(() => {
     const saved = localStorage.getItem('spirittalk_streak');
     return saved ? parseInt(saved, 10) : 5;
   });
 
   const [hasCheckedInToday, setHasCheckedInToday] = useState<boolean>(() => {
-    const saved = localStorage.getItem('spirittalk_checked_in_today');
-    return saved === 'true';
+    return localStorage.getItem('spirittalk_checked_in_today') === 'true';
   });
 
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => {
@@ -213,59 +182,22 @@ export default function App() {
     return saved ? JSON.parse(saved) : PRE_SEEDED_CHAT;
   });
 
-  // Modal / overlay states
   const [isQuizOpen, setIsQuizOpen] = useState(false);
   const [selectedInspiration, setSelectedInspiration] = useState<InspirationCard | null>(null);
-  
-  // Generation status
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Sync to local storage
-  useEffect(() => {
-    localStorage.setItem('spirittalk_xp', xp.toString());
-  }, [xp]);
+  // Persist to localStorage
+  useEffect(() => { localStorage.setItem('spirittalk_xp', xp.toString()); }, [xp]);
+  useEffect(() => { localStorage.setItem('spirittalk_streak', streak.toString()); }, [streak]);
+  useEffect(() => { localStorage.setItem('spirittalk_checked_in_today', hasCheckedInToday ? 'true' : 'false'); }, [hasCheckedInToday]);
+  useEffect(() => { localStorage.setItem('spirittalk_bookmarks', JSON.stringify(bookmarks)); }, [bookmarks]);
+  useEffect(() => { localStorage.setItem('spirittalk_notes', JSON.stringify(notes)); }, [notes]);
+  useEffect(() => { localStorage.setItem('spirittalk_chats', JSON.stringify(chatMessages)); }, [chatMessages]);
+  useEffect(() => { localStorage.setItem('spirittalk_posts', JSON.stringify(posts)); }, [posts]);
+  useEffect(() => { localStorage.setItem('spirittalk_friends', JSON.stringify(friends)); }, [friends]);
+  useEffect(() => { localStorage.setItem('spirittalk_direct_messages', JSON.stringify(directMessages)); }, [directMessages]);
+  useEffect(() => { localStorage.setItem('spirittalk_notifications', JSON.stringify(notifications)); }, [notifications]);
 
-  useEffect(() => {
-    localStorage.setItem('spirittalk_streak', streak.toString());
-  }, [streak]);
-
-  useEffect(() => {
-    localStorage.setItem('spirittalk_checked_in_today', hasCheckedInToday ? 'true' : 'false');
-  }, [hasCheckedInToday]);
-
-  useEffect(() => {
-    localStorage.setItem('spirittalk_bookmarks', JSON.stringify(bookmarks));
-  }, [bookmarks]);
-
-  useEffect(() => {
-    localStorage.setItem('spirittalk_notes', JSON.stringify(notes));
-  }, [notes]);
-
-  useEffect(() => {
-    localStorage.setItem('spirittalk_chats', JSON.stringify(chatMessages));
-  }, [chatMessages]);
-
-  useEffect(() => {
-    localStorage.setItem('spirittalk_posts', JSON.stringify(posts));
-  }, [posts]);
-
-  useEffect(() => {
-    localStorage.setItem('spirittalk_friends', JSON.stringify(friends));
-  }, [friends]);
-
-  useEffect(() => {
-    localStorage.setItem('spirittalk_direct_messages', JSON.stringify(directMessages));
-  }, [directMessages]);
-
-  useEffect(() => {
-    localStorage.setItem('spirittalk_notifications', JSON.stringify(notifications));
-  }, [notifications]);
-
-  useEffect(() => {
-    localStorage.setItem('spirittalk_unread_counts', JSON.stringify(unreadCounts));
-  }, [unreadCounts]);
-
-  // Sync Dark mode HTML class
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
@@ -274,50 +206,83 @@ export default function App() {
     }
   }, [darkMode]);
 
-  // Initialize Real-time synchronization (native Server-Sent Events stream + Pusher fallback)
+  // Charger les unread counts depuis le backend au démarrage
+  useEffect(() => {
+    if (!user) return;
+    apiService.getUnreadCounts().then(counts => {
+      setUnreadCounts(counts);
+    }).catch(() => {});
+  }, [user]);
+
+  // Pusher : temps réel
   useEffect(() => {
     if (!user) return;
 
-    // Pusher handles all real-time synchronization (SSE local server removed — not available on Laravel/Vercel)
     const pusher = pusherService.initialize(
+      // === NOUVEAU MESSAGE REÇU ===
       (newMsg) => {
-        const currentUserKey = (user.email || user.username || user.id?.toString() || '').toLowerCase();
-        const mappedSenderId = (newMsg.senderId?.toLowerCase() === currentUserKey) ? 'me' : newMsg.senderId;
-        const mappedRecipientId = (newMsg.recipientId?.toLowerCase() === currentUserKey) ? 'me' : newMsg.recipientId;
+        // FIX CRITIQUE : le backend broadcast envoie data.message avec les vrais IDs numériques
+        // formatMessage() retourne senderId='me' pour l'expéditeur, mais côté récepteur
+        // il retourne l'ID numérique. On mappe correctement ici.
+        const myId = String(user.id);
 
-        if (mappedSenderId !== 'me') {
-          setDirectMessages(prev => {
-            const exists = prev.some(m => m.id === newMsg.id);
-            if (exists) return prev;
-            return [...prev, {
-              id: newMsg.id || `dm_msg_${Date.now()}`,
-              senderId: mappedSenderId,
-              recipientId: mappedRecipientId,
-              text: newMsg.text,
-              images: newMsg.images,
-              audioUrl: newMsg.audioUrl,
-              audioDuration: newMsg.audioDuration,
-              timestamp: newMsg.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            }];
-          });
-        }
+        // senderId numérique de l'expéditeur (jamais 'me' côté Pusher broadcast)
+        const rawSenderId = String(newMsg.senderId);
+        const rawRecipientId = String(newMsg.recipientId);
+
+        // Si c'est MOI qui ai envoyé → ignorer (déjà ajouté localement)
+        if (rawSenderId === myId) return;
+
+        // C'est un message que je reçois
+        const mappedMsg: DirectMessage = {
+          id: newMsg.id || `dm_pusher_${Date.now()}`,
+          senderId: rawSenderId,   // ID numérique de l'ami
+          recipientId: 'me',
+          text: newMsg.text,
+          images: newMsg.images,
+          audioUrl: newMsg.audioUrl,
+          audioDuration: newMsg.audioDuration,
+          timestamp: newMsg.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          readAt: null
+        };
+
+        setDirectMessages(prev => {
+          if (prev.some(m => m.id === mappedMsg.id)) return prev;
+          return [...prev, mappedMsg];
+        });
+
+        // Incrémenter badge non lus si pas en train de voir cette conversation
+        setUnreadCounts(prev => ({
+          ...prev,
+          [rawSenderId]: (prev[rawSenderId] || 0) + 1
+        }));
       },
+
+      // === NOUVEAU POST COMMUNAUTÉ ===
       (newPost) => {
         if (newPost.username !== user.username) {
           setPosts(prev => {
-            const exists = prev.some(p => p.id === newPost.id);
-            if (exists) return prev;
+            if (prev.some(p => p.id === newPost.id)) return prev;
             return [newPost as CommunityPost, ...prev];
           });
         }
       },
-      (friendId, isTyping) => {
-        setFriends(prev => prev.map(f => f.id === friendId ? { ...f, isTyping } : f));
+
+      // === TYPING STATUS (avec live_text lettre par lettre) ===
+      (friendId, isTyping, liveText?: string) => {
+        setFriends(prev => prev.map(f => f.id === String(friendId) ? { ...f, isTyping } : f));
+
+        // Transmettre le texte en direct à InboxView via la fonction globale
+        if (liveText !== undefined && (window as any).__inboxSetLiveTyping) {
+          (window as any).__inboxSetLiveTyping(String(friendId), liveText);
+        }
       },
+
+      // === SIGNAL APPEL WebRTC ===
       async (callPayload) => {
         if (!user) return;
         const peerId = String(callPayload.senderId);
-        if (callPayload.type === 'offer' && peerId !== user.id?.toString()) {
+        if (callPayload.type === 'offer' && peerId !== String(user.id)) {
           try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             localStreamRef.current = stream;
@@ -326,7 +291,7 @@ export default function App() {
             stream.getTracks().forEach(track => pc.addTrack(track, stream));
             pc.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
               if (event.candidate) {
-                void apiService.sendCallSignal(String(callPayload.senderId), event.candidate.toJSON(), 'ice-candidate');
+                void apiService.sendCallSignal(peerId, event.candidate.toJSON(), 'ice-candidate');
               }
             };
             pc.ontrack = (event) => {
@@ -338,7 +303,7 @@ export default function App() {
             await pc.setRemoteDescription(callPayload.signal);
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
-            await apiService.sendCallSignal(String(callPayload.senderId), answer, 'answer');
+            await apiService.sendCallSignal(peerId, answer, 'answer');
             currentCallRef.current = { peerId, mode: 'audio' };
             setActiveCall({ peerId, mode: 'audio' });
           } catch (error) {
@@ -356,12 +321,24 @@ export default function App() {
       }
     );
 
-    return () => {
-      if (pusher) pusher.disconnect();
-    };
+    return () => { if (pusher) pusher.disconnect(); };
   }, [user]);
 
-  // Synchroniser les actualités/posts avec la vraie base de données de l'API
+  // Charger les messages depuis le backend
+  useEffect(() => {
+    if (!user) return;
+    const loadMessages = async () => {
+      try {
+        const msgs = await apiService.getDirectMessages();
+        if (msgs && msgs.length > 0) {
+          setDirectMessages(msgs);
+        }
+      } catch {}
+    };
+    loadMessages();
+  }, [user]);
+
+  // Charger posts backend
   useEffect(() => {
     if (!user) return;
     const loadBackendInspirations = async () => {
@@ -384,14 +361,12 @@ export default function App() {
           }));
           setPosts(mapped);
         }
-      } catch (err) {
-        console.warn("Could not load backend posts", err);
-      }
+      } catch {}
     };
     loadBackendInspirations();
   }, [user]);
 
-  // Charger et fusionner tous les utilisateurs enregistrés dans la base de données
+  // Charger amis depuis le backend
   useEffect(() => {
     if (!user) return;
     const fetchAndMergeUsers = async () => {
@@ -400,22 +375,17 @@ export default function App() {
           apiService.getRegisteredUsers(),
           apiService.getFriendships()
         ]);
-        
-        // Map friendships by lowercased identity keys
+
         const friendshipMap = new Map<string, string>();
         friendships.forEach((f: any) => {
           const key = (f.email || f.username || f.id?.toString() || '').toLowerCase();
-          if (key) {
-            friendshipMap.set(key, f.status);
-          }
+          if (key) friendshipMap.set(key, f.status);
         });
 
         if (backendUsers && backendUsers.length > 0) {
-          // REMPLACER complètement la liste
           const friendsList = backendUsers
             .filter((bu: any) => {
-              // Ne pas s'ajouter soi-même
-              const isMe = bu.email === user.email || bu.username === user.username || bu.id?.toString() === user.id?.toString() || bu.id_user?.toString() === user.id?.toString();
+              const isMe = bu.email === user.email || bu.username === user.username || bu.id?.toString() === user.id?.toString();
               return !isMe;
             })
             .map((bu: any): Friend => {
@@ -429,71 +399,36 @@ export default function App() {
                 avatar: bu.avatar || "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200",
                 religion: bu.religion || 'Mixte',
                 profession: bu.profession || "Fidèle de la Communauté",
-                status: status,
+                status,
                 isOnline: bu.isOnline !== undefined ? bu.isOnline : (Math.random() > 0.4),
               };
             });
           setFriends(friendsList);
         }
-      } catch (err) {
-        console.warn("Could not fetch and merge registered users", err);
-      }
+      } catch {}
     };
     fetchAndMergeUsers();
   }, [user]);
 
-  // exemple
   const handleSearchMembers = useCallback(async (query: string) => {
     if (!user) return;
-
     try {
       const [backendUsers, friendships] = await Promise.all([
         apiService.getRegisteredUsers(query),
         apiService.getFriendships()
       ]);
-      
+
       const friendshipMap = new Map<string, string>();
       friendships.forEach((f: any) => {
         const key = (f.email || f.username || f.id?.toString() || '').toLowerCase();
-        if (key) {
-          friendshipMap.set(key, f.status);
-        }
+        if (key) friendshipMap.set(key, f.status);
       });
 
-      if (!backendUsers || backendUsers.length === 0) {
-        // Si pas de résultats et recherche vide, recharger tous les utilisateurs
-        if (!query.trim()) {
-          const allUsers = await apiService.getRegisteredUsers();
-          const friendsList = (allUsers || [])
-            .filter((bu: any) => {
-              const isMe = bu.email === user.email || bu.username === user.username || bu.id?.toString() === user.id?.toString() || bu.id_user?.toString() === user.id?.toString();
-              return !isMe;
-            })
-            .map((bu: any): Friend => {
-              const key = (bu.email || bu.username || bu.id?.toString() || '').toLowerCase();
-              const status = (friendshipMap.get(key) || 'none') as Friend['status'];
-              return {
-                id: bu.id?.toString() || bu.username,
-                name: bu.name,
-                username: bu.username,
-                avatar: bu.avatar || "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200",
-                religion: bu.religion || 'Mixte',
-                profession: bu.profession || "Fidèle de la Communauté",
-                status: status,
-                isOnline: bu.isOnline !== undefined ? bu.isOnline : (Math.random() > 0.4),
-              };
-            });
-          setFriends(friendsList);
-        } else {
-          setFriends([]); // Vider la liste si aucun résultat de recherche
-        }
-        return;
-      }
+      const source = (!backendUsers || backendUsers.length === 0) ? await apiService.getRegisteredUsers() : backendUsers;
 
-      // REMPLACER complètement la liste avec les résultats de recherche
-      const friendsList = backendUsers
+      const friendsList = (source || [])
         .filter((bu: any) => {
-          const isMe = bu.email === user.email || bu.username === user.username || bu.id?.toString() === user.id?.toString() || bu.id_user?.toString() === user.id?.toString();
+          const isMe = bu.email === user.email || bu.username === user.username || bu.id?.toString() === user.id?.toString();
           return !isMe;
         })
         .map((bu: any): Friend => {
@@ -507,20 +442,15 @@ export default function App() {
             avatar: bu.avatar || "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200",
             religion: bu.religion || 'Mixte',
             profession: bu.profession || "Fidèle de la Communauté",
-            status: status,
+            status,
             isOnline: bu.isOnline !== undefined ? bu.isOnline : (Math.random() > 0.4),
           };
         });
-      
       setFriends(friendsList);
-    } catch (err) {
-      console.warn("Could not search registered users", err);
-    }
+    } catch {}
   }, [user]);
 
-  const handleAddXP = (amount: number) => {
-    setXp(prev => prev + amount);
-  };
+  const handleAddXP = (amount: number) => setXp(prev => prev + amount);
 
   const handleCheckIn = () => {
     if (hasCheckedInToday) return;
@@ -531,37 +461,21 @@ export default function App() {
   };
 
   const handleAddBookmark = (verseText: string, reference: string, source: string) => {
-    const alreadySaved = bookmarks.some(bm => bm.verseText === verseText && bm.reference === reference);
-    if (alreadySaved) return;
-
-    const newBookmark: Bookmark = {
-      id: `bm_${Date.now()}`,
-      verseText,
-      reference,
-      source,
-      savedAt: "Aujourd'hui"
-    };
+    if (bookmarks.some(bm => bm.verseText === verseText && bm.reference === reference)) return;
+    const newBookmark: Bookmark = { id: `bm_${Date.now()}`, verseText, reference, source, savedAt: "Aujourd'hui" };
     setBookmarks(prev => [newBookmark, ...prev]);
-    handleAddXP(10); // +10 XP for bookmarking
+    handleAddXP(10);
   };
 
-  const handleRemoveBookmark = (id: string) => {
-    setBookmarks(prev => prev.filter(bm => bm.id !== id));
-  };
+  const handleRemoveBookmark = (id: string) => setBookmarks(prev => prev.filter(bm => bm.id !== id));
 
   const handleAddNote = (newNote: Omit<Note, 'id' | 'date'>) => {
-    const note: Note = {
-      ...newNote,
-      id: `note_${Date.now()}`,
-      date: "Aujourd'hui"
-    };
+    const note: Note = { ...newNote, id: `note_${Date.now()}`, date: "Aujourd'hui" };
     setNotes(prev => [note, ...prev]);
-    handleAddXP(20); // +20 XP for logging a reflection
+    handleAddXP(20);
   };
 
-  const handleDeleteNote = (id: string) => {
-    setNotes(prev => prev.filter(n => n.id !== id));
-  };
+  const handleDeleteNote = (id: string) => setNotes(prev => prev.filter(n => n.id !== id));
 
   const handleSendMessage = async (text: string) => {
     const userMsg: ChatMessage = {
@@ -570,7 +484,6 @@ export default function App() {
       text,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
-
     setChatMessages(prev => [...prev, userMsg]);
     setIsGenerating(true);
 
@@ -582,30 +495,18 @@ export default function App() {
         const response = await fetch('https://marilyne.alwaysdata.net/spirittalk/api/gemini/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: chatMessages,
-            userMessage: text
-          })
+          body: JSON.stringify({ messages: chatMessages, userMessage: text })
         });
-
         const contentType = response.headers.get("content-type");
-        if (response.ok && contentType && contentType.includes("application/json")) {
+        if (response.ok && contentType?.includes("application/json")) {
           data = await response.json();
-          if (data && data.text) {
-            isSuccess = true;
-          }
+          if (data?.text) isSuccess = true;
         }
-      } catch (e) {
-        console.warn("Direct server chat endpoint failed, falling back to local AI engine", e);
-      }
+      } catch {}
 
-      // If server failed, generate client fallback
       if (!isSuccess) {
         const localRes = await generateLocalAiResponse(text, user?.religion);
-        data = {
-          text: localRes.text,
-          scriptureQuote: localRes.scriptureQuote
-        };
+        data = { text: localRes.text, scriptureQuote: localRes.scriptureQuote };
         isSuccess = true;
       }
 
@@ -618,16 +519,13 @@ export default function App() {
           scriptureQuote: data.scriptureQuote
         };
         setChatMessages(prev => [...prev, aiMsg]);
-        handleAddXP(15); // Gain some XP for interacting/learning
-      } else {
-        throw new Error("Impossible de générer une réponse.");
+        handleAddXP(15);
       }
     } catch (err: any) {
-      console.error(err);
       const errorMsg: ChatMessage = {
         id: `msg_error_${Date.now()}`,
         role: 'model',
-        text: `Désolé Seeker, une fluctuation spirituelle m'empêche de répondre. Vérifions les connexions. ${err.message || ""}`,
+        text: `Désolé, une fluctuation m'empêche de répondre. ${err.message || ""}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setChatMessages(prev => [...prev, errorMsg]);
@@ -641,21 +539,14 @@ export default function App() {
     handleSendMessage(prompt);
   };
 
-  const handleNotificationClick = () => {
-    alert("Vos notifications spirituelles sont à jour !");
-  };
+  const handleNotificationClick = () => alert("Vos notifications spirituelles sont à jour !");
 
   const handleUpdateProfile = async (updates: { name: string; email: string; religion: Religion; avatar: string; profession?: string; password?: string }) => {
     const result = await apiService.updateProfile(updates);
-    let finalUser = user;
-    if (result && result.user) {
-      finalUser = result.user;
-    } else {
-      finalUser = { ...user, ...updates };
-    }
+    const finalUser = result?.user ? result.user : { ...user, ...updates };
     setUser(finalUser);
     localStorage.setItem('spirittalk_user', JSON.stringify(finalUser));
-    alert("Profil spirituel mis à jour avec succès ! Vos préférences ont été enregistrées.");
+    alert("Profil spirituel mis à jour avec succès !");
   };
 
   const handleLogout = async () => {
@@ -663,38 +554,28 @@ export default function App() {
     setUser(null);
   };
 
-  // Community & Direct Messaging Handlers
   const handleCreatePost = async (content: string, images?: string[], videoUrl?: string, verse_reference?: string, verse_text?: string) => {
     const newPost: CommunityPost = {
       id: `post_${Date.now()}`,
       name: user?.name || 'Chercheur anonyme',
       username: user?.username || 'me',
       avatar: user?.avatar || "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200",
-      content,
-      religion: user?.religion || 'Mixte',
-      likes: 0,
-      likedByMe: false,
+      content, religion: user?.religion || 'Mixte',
+      likes: 0, likedByMe: false,
       time: "À l'instant",
-      images,
-      videoUrl,
-      comments: [],
-      verse_reference,
-      verse_text
+      images, videoUrl, comments: [],
+      verse_reference, verse_text
     };
     setPosts(prev => [newPost, ...prev]);
     handleAddXP(30);
 
     try {
-      await apiService.createInspiration(
-        content.trim(),
-        verse_reference || undefined,
-        verse_text || undefined,
+      await apiService.createInspiration(content.trim(), verse_reference, verse_text,
         verse_reference ? (verse_reference.includes('Coran') ? 'Coran' : 'Bible') : undefined
       );
-      // Reload inspirations to get database IDs and state
       const data = await apiService.getInspirations();
       if (data && Array.isArray(data)) {
-        const mapped = data.map((item: any) => ({
+        setPosts(data.map((item: any) => ({
           id: item.id.toString(),
           name: item.user?.name || 'Anonyme',
           username: item.user?.username || 'user',
@@ -707,50 +588,28 @@ export default function App() {
           verse_reference: item.verse_reference,
           verse_text: item.verse_text,
           comments: item.comments || []
-        }));
-        setPosts(mapped);
+        })));
       }
-    } catch (e) {
-      console.warn("Failed to create inspiration on backend", e);
-    }
+    } catch {}
   };
 
   const handleLikePost = async (postId: string) => {
-    setPosts(prev => prev.map(post => {
-      if (post.id === postId) {
-        return {
-          ...post,
-          likes: post.likedByMe ? Math.max(0, post.likes - 1) : post.likes + 1,
-          likedByMe: !post.likedByMe
-        };
-      }
-      return post;
-    }));
-
-    try {
-      await apiService.likeInspiration(postId);
-    } catch (e) {
-      console.warn("Failed to like inspiration on backend", e);
-    }
+    setPosts(prev => prev.map(post => post.id === postId
+      ? { ...post, likes: post.likedByMe ? Math.max(0, post.likes - 1) : post.likes + 1, likedByMe: !post.likedByMe }
+      : post
+    ));
+    try { await apiService.likeInspiration(postId); } catch {}
   };
 
   const handleAddComment = (postId: string, content: string) => {
     const newComment = {
       id: `comment_${Date.now()}`,
       authorName: user.name || 'Chercheur anonyme',
-      authorAvatar: user.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200",
+      authorAvatar: user.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200",
       content,
       time: "À l'instant"
     };
-    setPosts(prev => prev.map(post => {
-      if (post.id === postId) {
-        return {
-          ...post,
-          comments: [...post.comments, newComment]
-        };
-      }
-      return post;
-    }));
+    setPosts(prev => prev.map(post => post.id === postId ? { ...post, comments: [...post.comments, newComment] } : post));
     handleAddXP(10);
   };
 
@@ -760,56 +619,42 @@ export default function App() {
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
-      osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.12); // A5
+      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.12);
       gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
       osc.connect(gain);
       gain.connect(audioCtx.destination);
       osc.start();
       osc.stop(audioCtx.currentTime + 0.35);
-    } catch (e) {
-      console.warn("Web Audio chime blocked or unsupported", e);
-    }
+    } catch {}
   };
 
   const setupWebRtc = useCallback(async (peerId: string, mode: 'audio' | 'video' = 'audio') => {
     if (!user) return;
-
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: mode === 'video'
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: mode === 'video' });
       localStreamRef.current = stream;
-
       const pc = new RTCPeerConnection({ iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] });
       peerConnectionRef.current = pc;
-
       stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
       pc.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
-        if (event.candidate) {
-          void apiService.sendCallSignal(peerId, event.candidate.toJSON(), 'ice-candidate');
-        }
+        if (event.candidate) void apiService.sendCallSignal(peerId, event.candidate.toJSON(), 'ice-candidate');
       };
-
       pc.ontrack = (event) => {
         if (remoteAudioRef.current) {
           remoteAudioRef.current.srcObject = event.streams[0];
           void remoteAudioRef.current.play().catch(() => undefined);
         }
       };
-
       currentCallRef.current = { peerId, mode };
       setActiveCall({ peerId, mode });
-
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       await apiService.sendCallSignal(peerId, offer, 'offer');
     } catch (error) {
       console.warn('WebRTC setup failed', error);
-      window.alert('Votre navigateur bloque l’accès au microphone.');
+      window.alert('Votre navigateur bloque l\'accès au microphone.');
     }
   }, [user]);
 
@@ -828,108 +673,55 @@ export default function App() {
     setActiveCall(null);
   }, []);
 
- const handleSendFriendRequest = async (friendId: string) => {
-  setFriends(prev => prev.map(f =>
-    f.id === friendId ? { ...f, status: 'pending_sent' } : f
-  ));
-  playPusherPing();
-
-  try {
-    await apiService.sendFriendRequest(friendId);
-  } catch (e) {
-    console.warn("Failed to send friend request on backend", e);
-  }
-};
+  const handleSendFriendRequest = async (friendId: string) => {
+    setFriends(prev => prev.map(f => f.id === friendId ? { ...f, status: 'pending_sent' } : f));
+    playPusherPing();
+    try { await apiService.sendFriendRequest(friendId); } catch {}
+  };
 
   const handleAcceptFriendRequest = async (friendId: string) => {
-    setFriends(prev => prev.map(f => {
-      if (f.id === friendId) {
-        return { ...f, status: 'accepted', isOnline: true };
-      }
-      return f;
-    }));
+    setFriends(prev => prev.map(f => f.id === friendId ? { ...f, status: 'accepted', isOnline: true } : f));
     setNotifications(prev => prev.filter(n => !(n.type === 'friend_request' && n.description.includes(friendId))));
     const newNotif: SpiritNotification = {
       id: `notif_accept_${Date.now()}`,
       title: "Nouvelle fraternité établie !",
       description: `Vous êtes maintenant connecté avec ${friends.find(f => f.id === friendId)?.name || 'un fidèle'}.`,
-      time: "À l'instant",
-      isRead: false,
-      type: 'friend_accept'
+      time: "À l'instant", isRead: false, type: 'friend_accept'
     };
     setNotifications(prev => [newNotif, ...prev]);
     handleAddXP(40);
-
-    try {
-      await apiService.acceptFriendRequest(friendId);
-    } catch (e) {
-      console.warn("Failed to accept friend request on backend", e);
-    }
+    try { await apiService.acceptFriendRequest(friendId); } catch {}
   };
 
   const handleRemoveFriend = async (friendId: string) => {
-    setFriends(prev => prev.map(f => {
-      if (f.id === friendId) {
-        return { ...f, status: 'none' };
-      }
-      return f;
-    }));
-
-    try {
-      await apiService.removeFriend(friendId);
-    } catch (e) {
-      console.warn("Failed to remove friend on backend", e);
-    }
+    setFriends(prev => prev.map(f => f.id === friendId ? { ...f, status: 'none' } : f));
+    try { await apiService.removeFriend(friendId); } catch {}
   };
 
   const handleSendDirectMessage = async (recipientId: string, text?: string, images?: string[], audioUrl?: string, audioDuration?: string) => {
     const newMsgId = `dm_msg_${Date.now()}`;
     const timestampStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
     const newMsg: DirectMessage = {
-      id: newMsgId,
-      senderId: 'me',
-      recipientId,
-      text,
-      timestamp: timestampStr,
-      images,
-      audioUrl,
-      audioDuration
+      id: newMsgId, senderId: 'me', recipientId,
+      text, timestamp: timestampStr, images, audioUrl, audioDuration, readAt: null
     };
     setDirectMessages(prev => [...prev, newMsg]);
-    setUnreadCounts(prev => {
-      const copy = { ...prev };
-      delete copy[recipientId];
-      return copy;
-    });
-
+    // Retirer le badge unread pour ce destinataire
+    setUnreadCounts(prev => { const c = { ...prev }; delete c[recipientId]; return c; });
     try {
       await apiService.sendDirectMessage(String(recipientId), text, images, audioUrl, audioDuration);
-    } catch (err) {
-      console.warn("Failed to transmit message through server", err);
-    }
+    } catch {}
   };
 
   const handleSimulateTyping = async (recipientId: string) => {
     try {
       await apiService.sendTypingStatus(String(recipientId), true);
-
-      setTimeout(async () => {
-        try {
-          await apiService.sendTypingStatus(String(recipientId), false);
-        } catch (e) {}
-      }, 3000);
-    } catch (err) {
-      console.warn('Typing status failed', err);
-    }
-
+      setTimeout(() => apiService.sendTypingStatus(String(recipientId), false).catch(() => {}), 3000);
+    } catch {}
     setFriends(prev => prev.map(f => f.id === recipientId ? { ...f, isTyping: true } : f));
-    setTimeout(() => {
-      setFriends(prev => prev.map(f => f.id === recipientId ? { ...f, isTyping: false } : f));
-    }, 2000);
+    setTimeout(() => setFriends(prev => prev.map(f => f.id === recipientId ? { ...f, isTyping: false } : f)), 2000);
   };
 
-  // Render Authentication screen if not logged in
   if (!user) {
     return <AuthView onAuthSuccess={(authenticatedUser) => setUser(authenticatedUser)} />;
   }
@@ -937,176 +729,77 @@ export default function App() {
   return (
     <div className="min-h-screen bg-cream-base dark:bg-charcoal-dark text-slate-800 dark:text-cream-base flex flex-col md:flex-row transition-colors duration-300">
       <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
-      
-      {/* Sidebar Navigation for Desktop */}
+
+      {/* Sidebar Desktop */}
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-20 flex-col items-center py-6 gap-8 border-r border-cream-darker dark:border-charcoal-light/10 bg-white/70 dark:bg-charcoal-card/70 backdrop-blur-md z-40">
         <div className="flex items-center gap-1 font-serif text-emerald-deep dark:text-gold-bright font-bold py-2 shrink-0 text-sm">
-          <span>S</span>
-          <span>T</span>
+          <span>S</span><span>T</span>
         </div>
-        
+
         <div className="flex-grow flex flex-col justify-center gap-6">
-          <button
-            onClick={() => setCurrentTab('home')}
-            className={`p-3 rounded-xl transition-all ${
-              currentTab === 'home'
-                ? "bg-emerald-medium text-white dark:bg-emerald-fixed dark:text-charcoal-dark shadow-md scale-110"
-                : "text-slate-400 hover:text-emerald-medium dark:hover:text-gold-bright hover:bg-cream-darker dark:hover:bg-charcoal-light/20"
-            }`}
-            title="Accueil"
-          >
-            <Home className="w-5 h-5" />
-          </button>
-
-          <button
-            onClick={() => setCurrentTab('community')}
-            className={`p-3 rounded-xl transition-all ${
-              currentTab === 'community'
-                ? "bg-emerald-medium text-white dark:bg-emerald-fixed dark:text-charcoal-dark shadow-md scale-110"
-                : "text-slate-400 hover:text-emerald-medium dark:hover:text-gold-bright hover:bg-cream-darker dark:hover:bg-charcoal-light/20"
-            }`}
-            title="Communauté"
-          >
-            <Users className="w-5 h-5" />
-          </button>
-
-          <button
-            onClick={() => setCurrentTab('inbox')}
-            className={`p-3 rounded-xl transition-all ${
-              currentTab === 'inbox'
-                ? "bg-emerald-medium text-white dark:bg-emerald-fixed dark:text-charcoal-dark shadow-md scale-110"
-                : "text-slate-400 hover:text-emerald-medium dark:hover:text-gold-bright hover:bg-cream-darker dark:hover:bg-charcoal-light/20"
-            }`}
-            title="Messagerie"
-          >
-            <MessageCircle className="w-5 h-5" />
-          </button>
-
-          <button
-            onClick={() => setCurrentTab('chat')}
-            className={`p-3 rounded-xl transition-all ${
-              currentTab === 'chat'
-                ? "bg-emerald-medium text-white dark:bg-emerald-fixed dark:text-charcoal-dark shadow-md scale-110"
-                : "text-slate-400 hover:text-emerald-medium dark:hover:text-gold-bright hover:bg-cream-darker dark:hover:bg-charcoal-light/20"
-            }`}
-            title="Guidance IA"
-          >
-            <Sparkles className="w-5 h-5" />
-          </button>
-
-          <button
-            onClick={() => setCurrentTab('search')}
-            className={`p-3 rounded-xl transition-all ${
-              currentTab === 'search'
-                ? "bg-emerald-medium text-white dark:bg-emerald-fixed dark:text-charcoal-dark shadow-md scale-110"
-                : "text-slate-400 hover:text-emerald-medium dark:hover:text-gold-bright hover:bg-cream-darker dark:hover:bg-charcoal-light/20"
-            }`}
-            title="Rechercher"
-          >
-            <Search className="w-5 h-5" />
-          </button>
-
-          <button
-            onClick={() => setCurrentTab('profile')}
-            className={`p-3 rounded-xl transition-all ${
-              currentTab === 'profile'
-                ? "bg-emerald-medium text-white dark:bg-emerald-fixed dark:text-charcoal-dark shadow-md scale-110"
-                : "text-slate-400 hover:text-emerald-medium dark:hover:text-gold-bright hover:bg-cream-darker dark:hover:bg-charcoal-light/20"
-            }`}
-            title="Mon Profil"
-          >
-            <User className="w-5 h-5" />
-          </button>
+          {[
+            { tab: 'home', icon: <Home className="w-5 h-5" />, title: 'Accueil' },
+            { tab: 'community', icon: <Users className="w-5 h-5" />, title: 'Communauté' },
+            { tab: 'inbox', icon: <MessageCircle className="w-5 h-5" />, title: 'Messagerie', badge: Object.values(unreadCounts).reduce((a, b) => a + b, 0) },
+            { tab: 'chat', icon: <Sparkles className="w-5 h-5" />, title: 'Guidance IA' },
+            { tab: 'search', icon: <Search className="w-5 h-5" />, title: 'Rechercher' },
+            { tab: 'profile', icon: <User className="w-5 h-5" />, title: 'Mon Profil' },
+          ].map(({ tab, icon, title, badge }) => (
+            <button
+              key={tab}
+              onClick={() => setCurrentTab(tab as any)}
+              className={`p-3 rounded-xl transition-all relative ${
+                currentTab === tab
+                  ? "bg-emerald-medium text-white dark:bg-emerald-fixed dark:text-charcoal-dark shadow-md scale-110"
+                  : "text-slate-400 hover:text-emerald-medium dark:hover:text-gold-bright hover:bg-cream-darker dark:hover:bg-charcoal-light/20"
+              }`}
+              title={title}
+            >
+              {icon}
+              {badge && badge > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black rounded-full px-1 min-w-[16px] text-center">
+                  {badge}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
 
-        {/* Bottom actions on desktop sidebar */}
-        <div className="flex flex-col gap-4">
-          <button
-            onClick={() => setDarkMode(prev => !prev)}
-            className="p-3 text-slate-400 hover:text-emerald-medium dark:hover:text-gold-bright rounded-xl hover:bg-cream-darker dark:hover:bg-charcoal-light/20 transition-all"
-            title="Changer de thème"
-          >
-            {darkMode ? <Sun className="w-5 h-5 text-gold-bright" /> : <Moon className="w-5 h-5" />}
-          </button>
-        </div>
+        <button
+          onClick={() => setDarkMode(prev => !prev)}
+          className="p-3 text-slate-400 hover:text-emerald-medium dark:hover:text-gold-bright rounded-xl hover:bg-cream-darker dark:hover:bg-charcoal-light/20 transition-all"
+          title="Changer de thème"
+        >
+          {darkMode ? <Sun className="w-5 h-5 text-gold-bright" /> : <Moon className="w-5 h-5" />}
+        </button>
       </aside>
 
-      {/* Main Content Area */}
+      {/* Main Content */}
       <div className="flex-grow md:pl-20 flex flex-col">
-        
-        {/* Top App Bar Header */}
         <header className="sticky top-0 w-full z-40 flex justify-between items-center px-4 md:px-8 h-16 bg-cream-base/80 dark:bg-charcoal-dark/85 backdrop-blur-md border-b border-cream-darker dark:border-charcoal-light/10">
-          <div className="flex items-center gap-3">
-            <h1 className="font-serif text-xl md:text-2xl font-bold tracking-tight text-emerald-deep dark:text-gold-bright">
-              SpiritTalk
-            </h1>
-          </div>
-          
+          <h1 className="font-serif text-xl md:text-2xl font-bold tracking-tight text-emerald-deep dark:text-gold-bright">SpiritTalk</h1>
           <div className="flex items-center gap-2">
-            {/* Quick stats on Header */}
             <div className="hidden sm:flex items-center gap-1 bg-emerald-medium/5 dark:bg-charcoal-card px-3 py-1.5 rounded-lg border border-emerald-medium/10">
               <Award className="w-3.5 h-3.5 text-gold-deep dark:text-gold-bright" />
-              <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-medium dark:text-cream-base/75">
-                {xp} XP
-              </span>
+              <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-medium dark:text-cream-base/75">{xp} XP</span>
             </div>
-
-            <button
-              onClick={() => setDarkMode(prev => !prev)}
-              className="md:hidden p-2 text-slate-500 dark:text-cream-base/60 hover:bg-cream-darker dark:hover:bg-charcoal-light/25 rounded-lg transition-colors"
-              title="Thème"
-            >
-            
+            <button onClick={() => setDarkMode(prev => !prev)} className="md:hidden p-2 text-slate-500 dark:text-cream-base/60 hover:bg-cream-darker dark:hover:bg-charcoal-light/25 rounded-lg transition-colors">
               {darkMode ? <Sun className="w-4 h-4 text-gold-bright" /> : <Moon className="w-4 h-4" />}
             </button>
-
-            <button
-              onClick={handleNotificationClick}
-              className="p-2 text-slate-500 dark:text-cream-base/60 hover:bg-cream-darker dark:hover:bg-charcoal-light/25 rounded-lg transition-colors relative"
-              title="Notifications"
-            >
+            <button onClick={handleNotificationClick} className="p-2 text-slate-500 dark:text-cream-base/60 hover:bg-cream-darker dark:hover:bg-charcoal-light/25 rounded-lg transition-colors relative">
               <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-gold-deep rounded-full animate-ping"></span>
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-gold-deep rounded-full animate-ping" />
             </button>
           </div>
         </header>
 
-        {/* Center Main Reading Stage */}
         <main className="flex-grow p-4 md:p-8 max-w-[1000px] mx-auto w-full">
           {currentTab === 'home' && (
-            <HomeView
-              user={user}
-              xp={xp}
-              streak={streak}
-              onOpenQuiz={() => setIsQuizOpen(true)}
-              onSelectInspiration={setSelectedInspiration}
-              onBookmark={handleAddBookmark}
-              onAddXP={handleAddXP}
-              onNavigateToChatWithQuery={handleNavigateToChatWithQuery}
-              posts={posts}
-              onAddPost={handleCreatePost}
-              onLikePost={handleLikePost}
-            />
+            <HomeView user={user} xp={xp} streak={streak} onOpenQuiz={() => setIsQuizOpen(true)} onSelectInspiration={setSelectedInspiration} onBookmark={handleAddBookmark} onAddXP={handleAddXP} onNavigateToChatWithQuery={handleNavigateToChatWithQuery} posts={posts} onAddPost={handleCreatePost} onLikePost={handleLikePost} />
           )}
-
           {currentTab === 'community' && (
-            <CommunityView
-              user={user}
-              posts={posts}
-              friends={friends}
-              notifications={notifications}
-              onAddPost={handleCreatePost}
-              onLikePost={handleLikePost}
-              onAddComment={handleAddComment}
-              onSendFriendRequest={handleSendFriendRequest}
-              onAcceptFriendRequest={handleAcceptFriendRequest}
-              onRemoveFriend={handleRemoveFriend}
-              onClearNotification={(notifId) => setNotifications(prev => prev.filter(n => n.id !== notifId))}
-              onNavigateToChat={() => setCurrentTab('inbox')}
-              onSearchMembers={handleSearchMembers}
-            />
+            <CommunityView user={user} posts={posts} friends={friends} notifications={notifications} onAddPost={handleCreatePost} onLikePost={handleLikePost} onAddComment={handleAddComment} onSendFriendRequest={handleSendFriendRequest} onAcceptFriendRequest={handleAcceptFriendRequest} onRemoveFriend={handleRemoveFriend} onClearNotification={(notifId) => setNotifications(prev => prev.filter(n => n.id !== notifId))} onNavigateToChat={() => setCurrentTab('inbox')} onSearchMembers={handleSearchMembers} />
           )}
-
           {currentTab === 'inbox' && (
             <InboxView
               user={user}
@@ -1116,146 +809,52 @@ export default function App() {
               onSendMessage={handleSendDirectMessage}
               onSimulateTyping={handleSimulateTyping}
               onSelectFriend={(friendId) => {
-                setUnreadCounts(prev => {
-                  const copy = { ...prev };
-                  delete copy[friendId];
-                  return copy;
-                });
+                // Vider le badge rouge quand on ouvre la conversation
+                setUnreadCounts(prev => { const c = { ...prev }; delete c[friendId]; return c; });
               }}
               onStartCall={handleStartCall}
             />
           )}
-
           {currentTab === 'chat' && (
-            <ChatView
-              messages={chatMessages}
-              onSendMessage={handleSendMessage}
-              onBookmark={handleAddBookmark}
-              isGenerating={isGenerating}
-            />
+            <ChatView messages={chatMessages} onSendMessage={handleSendMessage} onBookmark={handleAddBookmark} isGenerating={isGenerating} />
           )}
-
           {currentTab === 'search' && (
-            <SearchView
-              onBookmark={handleAddBookmark}
-              onNavigateToChatWithQuery={handleNavigateToChatWithQuery}
-            />
+            <SearchView onBookmark={handleAddBookmark} onNavigateToChatWithQuery={handleNavigateToChatWithQuery} />
           )}
-
           {currentTab === 'profile' && (
-            <ProfileView
-              user={user}
-              xp={xp}
-              streak={streak}
-              bookmarks={bookmarks}
-              notes={notes}
-              onCheckIn={handleCheckIn}
-              onRemoveBookmark={handleRemoveBookmark}
-              onAddNote={handleAddNote}
-              onDeleteNote={handleDeleteNote}
-              onNavigateToChatWithQuery={handleNavigateToChatWithQuery}
-              hasCheckedInToday={hasCheckedInToday}
-              onUpdateProfile={handleUpdateProfile}
-              onLogout={handleLogout}
-            />
+            <ProfileView user={user} xp={xp} streak={streak} bookmarks={bookmarks} notes={notes} onCheckIn={handleCheckIn} onRemoveBookmark={handleRemoveBookmark} onAddNote={handleAddNote} onDeleteNote={handleDeleteNote} onNavigateToChatWithQuery={handleNavigateToChatWithQuery} hasCheckedInToday={hasCheckedInToday} onUpdateProfile={handleUpdateProfile} onLogout={handleLogout} />
           )}
         </main>
       </div>
 
-      {/* Bottom Nav Bar for Mobile View */}
+      {/* Bottom Nav Mobile */}
       <nav className="md:hidden fixed bottom-0 w-full z-50 flex justify-around items-center h-20 pb-safe bg-cream-base/90 dark:bg-charcoal-card/90 backdrop-blur-md border-t border-cream-darker dark:border-charcoal-light/10 shadow-lg">
-        <button
-          onClick={() => setCurrentTab('home')}
-          className={`flex flex-col items-center justify-center p-2 text-xs font-semibold ${
-            currentTab === 'home'
-              ? "text-emerald-deep dark:text-gold-bright"
-              : "text-slate-400 hover:text-slate-600"
-          }`}
-        >
-          <Home className="w-5 h-5 mb-1" />
-          <span className="text-[9px] tracking-wide font-medium">Accueil</span>
-        </button>
-
-        <button
-          onClick={() => setCurrentTab('community')}
-          className={`flex flex-col items-center justify-center p-2 text-xs font-semibold ${
-            currentTab === 'community'
-              ? "text-emerald-deep dark:text-gold-bright"
-              : "text-slate-400 hover:text-slate-600"
-          }`}
-        >
-          <Users className="w-5 h-5 mb-1" />
-          <span className="text-[9px] tracking-wide font-medium">Communauté</span>
-        </button>
-
-        <button
-          onClick={() => setCurrentTab('inbox')}
-          className={`flex flex-col items-center justify-center p-2 text-xs font-semibold ${
-            currentTab === 'inbox'
-              ? "text-emerald-deep dark:text-gold-bright"
-              : "text-slate-400 hover:text-slate-600"
-          }`}
-        >
-          <MessageCircle className="w-5 h-5 mb-1" />
-          <span className="text-[9px] tracking-wide font-medium">Messages</span>
-        </button>
-
-        <button
-          onClick={() => setCurrentTab('chat')}
-          className={`flex flex-col items-center justify-center p-2 text-xs font-semibold ${
-            currentTab === 'chat'
-              ? "text-emerald-deep dark:text-gold-bright"
-              : "text-slate-400 hover:text-slate-600"
-          }`}
-        >
-          <Sparkles className="w-5 h-5 mb-1" />
-          <span className="text-[9px] tracking-wide font-medium">IA</span>
-        </button>
-
-        <button
-          onClick={() => setCurrentTab('search')}
-          className={`flex flex-col items-center justify-center p-2 text-xs font-semibold ${
-            currentTab === 'search'
-              ? "text-emerald-deep dark:text-gold-bright"
-              : "text-slate-400 hover:text-slate-600"
-          }`}
-        >
-          <Search className="w-5 h-5 mb-1" />
-          <span className="text-[9px] tracking-wide font-medium">Étude</span>
-        </button>
-
-        <button
-          onClick={() => setCurrentTab('profile')}
-          className={`flex flex-col items-center justify-center p-2 text-xs font-semibold ${
-            currentTab === 'profile'
-              ? "text-emerald-deep dark:text-gold-bright"
-              : "text-slate-400 hover:text-slate-600"
-          }`}
-        >
-          <User className="w-5 h-5 mb-1" />
-          <span className="text-[9px] tracking-wide font-medium">Profil</span>
-        </button>
+        {[
+          { tab: 'home', icon: <Home className="w-5 h-5 mb-1" />, label: 'Accueil' },
+          { tab: 'community', icon: <Users className="w-5 h-5 mb-1" />, label: 'Communauté' },
+          { tab: 'inbox', icon: <MessageCircle className="w-5 h-5 mb-1" />, label: 'Messages', badge: Object.values(unreadCounts).reduce((a, b) => a + b, 0) },
+          { tab: 'chat', icon: <Sparkles className="w-5 h-5 mb-1" />, label: 'IA' },
+          { tab: 'search', icon: <Search className="w-5 h-5 mb-1" />, label: 'Étude' },
+          { tab: 'profile', icon: <User className="w-5 h-5 mb-1" />, label: 'Profil' },
+        ].map(({ tab, icon, label, badge }) => (
+          <button
+            key={tab}
+            onClick={() => setCurrentTab(tab as any)}
+            className={`flex flex-col items-center justify-center p-2 text-xs font-semibold relative ${currentTab === tab ? "text-emerald-deep dark:text-gold-bright" : "text-slate-400 hover:text-slate-600"}`}
+          >
+            {icon}
+            <span className="text-[9px] tracking-wide font-medium">{label}</span>
+            {badge && badge > 0 && (
+              <span className="absolute top-1 right-1 bg-red-500 text-white text-[8px] font-black rounded-full px-1 min-w-[14px] text-center">
+                {badge}
+              </span>
+            )}
+          </button>
+        ))}
       </nav>
 
-      {/* Overlays / Modals */}
-      <QuizModal
-        isOpen={isQuizOpen}
-        onClose={() => setIsQuizOpen(false)}
-        onQuizComplete={(xpGained) => {
-          handleAddXP(xpGained);
-          if (!hasCheckedInToday) {
-            setHasCheckedInToday(true);
-            setStreak(prev => prev + 1);
-          }
-        }}
-      />
-
-      <InspirationModal
-        card={selectedInspiration}
-        onClose={() => setSelectedInspiration(null)}
-        onBookmark={handleAddBookmark}
-      />
-
+      <QuizModal isOpen={isQuizOpen} onClose={() => setIsQuizOpen(false)} onQuizComplete={(xpGained) => { handleAddXP(xpGained); if (!hasCheckedInToday) { setHasCheckedInToday(true); setStreak(prev => prev + 1); } }} />
+      <InspirationModal card={selectedInspiration} onClose={() => setSelectedInspiration(null)} onBookmark={handleAddBookmark} />
     </div>
   );
 }
