@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useEffect, useRef } from 'react';
-import { Home, Sparkles, Search, User, Award, Moon, Sun, Bell, MessageSquare, Users, MessageCircle } from 'lucide-react';
+import { Home, Sparkles, Search, User, Award, Moon, Sun, Bell, MessageSquare, Users, MessageCircle, Phone, PhoneOff } from 'lucide-react';
 import { ChatMessage, Bookmark, Note, InspirationCard, Religion, CommunityPost, Friend, DirectMessage, SpiritNotification } from './types';
 import HomeView from './components/HomeView';
 import ChatView from './components/ChatView';
@@ -124,6 +124,10 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<'home' | 'community' | 'inbox' | 'chat' | 'search' | 'profile'>('home');
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const [activeCall, setActiveCall] = useState<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
+
+  // ✅ FIX BUG 3 : état pour l'appel entrant (écran de sonnerie)
+  const [incomingCall, setIncomingCall] = useState<{ peerId: string; mode: 'audio' | 'video'; signal: any } | null>(null);
+
   const peerConnectionRef = useRef<any>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -214,6 +218,45 @@ export default function App() {
     }).catch(() => {});
   }, [user]);
 
+  // ✅ FIX BUG 3 : accepter l'appel entrant après clic sur "Décrocher"
+  const handleAcceptCall = useCallback(async () => {
+    if (!incomingCall) return;
+    const { peerId, signal } = incomingCall;
+    setIncomingCall(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      localStreamRef.current = stream;
+      const pc = new RTCPeerConnection({ iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] });
+      peerConnectionRef.current = pc;
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+      pc.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
+        if (event.candidate) {
+          void apiService.sendCallSignal(peerId, event.candidate.toJSON(), 'ice-candidate');
+        }
+      };
+      pc.ontrack = (event) => {
+        if (remoteAudioRef.current) {
+          remoteAudioRef.current.srcObject = event.streams[0];
+          void remoteAudioRef.current.play().catch(() => undefined);
+        }
+      };
+      await pc.setRemoteDescription(signal);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await apiService.sendCallSignal(peerId, answer, 'answer');
+      currentCallRef.current = { peerId, mode: 'audio' };
+      setActiveCall({ peerId, mode: 'audio' });
+    } catch (error) {
+      console.warn('Could not answer call', error);
+      alert('Impossible d\'accéder au microphone.');
+    }
+  }, [incomingCall]);
+
+  // ✅ FIX BUG 3 : refuser l'appel
+  const handleDeclineCall = useCallback(() => {
+    setIncomingCall(null);
+  }, []);
+
   // Pusher : temps réel
   useEffect(() => {
     if (!user) return;
@@ -221,22 +264,16 @@ export default function App() {
     const pusher = pusherService.initialize(
       // === NOUVEAU MESSAGE REÇU ===
       (newMsg) => {
-        // FIX CRITIQUE : le backend broadcast envoie data.message avec les vrais IDs numériques
-        // formatMessage() retourne senderId='me' pour l'expéditeur, mais côté récepteur
-        // il retourne l'ID numérique. On mappe correctement ici.
         const myId = String(user.id);
-
-        // senderId numérique de l'expéditeur (jamais 'me' côté Pusher broadcast)
         const rawSenderId = String(newMsg.senderId);
-        const rawRecipientId = String(newMsg.recipientId);
 
         // Si c'est MOI qui ai envoyé → ignorer (déjà ajouté localement)
         if (rawSenderId === myId) return;
 
-        // C'est un message que je reçois
+        // ✅ FIX BUG 1 : ID unique stable pour éviter les doublons React
         const mappedMsg: DirectMessage = {
-          id: newMsg.id || `dm_pusher_${Date.now()}`,
-          senderId: rawSenderId,   // ID numérique de l'ami
+          id: newMsg.id ? String(newMsg.id) : `dm_pusher_${rawSenderId}_${Date.now()}`,
+          senderId: rawSenderId,
           recipientId: 'me',
           text: newMsg.text,
           images: newMsg.images,
@@ -247,11 +284,12 @@ export default function App() {
         };
 
         setDirectMessages(prev => {
+          // Dédoublonner sur l'ID
           if (prev.some(m => m.id === mappedMsg.id)) return prev;
           return [...prev, mappedMsg];
         });
 
-        // Incrémenter badge non lus si pas en train de voir cette conversation
+        // Incrémenter badge non lus
         setUnreadCounts(prev => ({
           ...prev,
           [rawSenderId]: (prev[rawSenderId] || 0) + 1
@@ -268,11 +306,9 @@ export default function App() {
         }
       },
 
-      // === TYPING STATUS (avec live_text lettre par lettre) ===
+      // === TYPING STATUS ===
       (friendId, isTyping, liveText?: string) => {
         setFriends(prev => prev.map(f => f.id === String(friendId) ? { ...f, isTyping } : f));
-
-        // Transmettre le texte en direct à InboxView via la fonction globale
         if (liveText !== undefined && (window as any).__inboxSetLiveTyping) {
           (window as any).__inboxSetLiveTyping(String(friendId), liveText);
         }
@@ -282,33 +318,15 @@ export default function App() {
       async (callPayload) => {
         if (!user) return;
         const peerId = String(callPayload.senderId);
+
+        // ✅ FIX BUG 3 : afficher l'écran de sonnerie au lieu d'accepter automatiquement
         if (callPayload.type === 'offer' && peerId !== String(user.id)) {
-          try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-            localStreamRef.current = stream;
-            const pc = new RTCPeerConnection({ iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] });
-            peerConnectionRef.current = pc;
-            stream.getTracks().forEach(track => pc.addTrack(track, stream));
-            pc.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
-              if (event.candidate) {
-                void apiService.sendCallSignal(peerId, event.candidate.toJSON(), 'ice-candidate');
-              }
-            };
-            pc.ontrack = (event) => {
-              if (remoteAudioRef.current) {
-                remoteAudioRef.current.srcObject = event.streams[0];
-                void remoteAudioRef.current.play().catch(() => undefined);
-              }
-            };
-            await pc.setRemoteDescription(callPayload.signal);
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            await apiService.sendCallSignal(peerId, answer, 'answer');
-            currentCallRef.current = { peerId, mode: 'audio' };
-            setActiveCall({ peerId, mode: 'audio' });
-          } catch (error) {
-            console.warn('Could not answer call', error);
-          }
+          setIncomingCall({
+            peerId,
+            mode: callPayload.signal?.type === 'video' ? 'video' : 'audio',
+            signal: callPayload.signal
+          });
+          return; // ← ne pas accepter automatiquement
         }
 
         if (callPayload.type === 'answer' && peerConnectionRef.current) {
@@ -706,7 +724,6 @@ export default function App() {
       text, timestamp: timestampStr, images, audioUrl, audioDuration, readAt: null
     };
     setDirectMessages(prev => [...prev, newMsg]);
-    // Retirer le badge unread pour ce destinataire
     setUnreadCounts(prev => { const c = { ...prev }; delete c[recipientId]; return c; });
     try {
       await apiService.sendDirectMessage(String(recipientId), text, images, audioUrl, audioDuration);
@@ -726,9 +743,70 @@ export default function App() {
     return <AuthView onAuthSuccess={(authenticatedUser) => setUser(authenticatedUser)} />;
   }
 
+  // Trouver le nom de l'appelant pour l'écran de sonnerie
+  const callerName = incomingCall
+    ? (friends.find(f => f.id === incomingCall.peerId)?.name || 'Quelqu\'un vous appelle')
+    : '';
+  const callerAvatar = incomingCall
+    ? (friends.find(f => f.id === incomingCall.peerId)?.avatar || '')
+    : '';
+
   return (
     <div className="min-h-screen bg-cream-base dark:bg-charcoal-dark text-slate-800 dark:text-cream-base flex flex-col md:flex-row transition-colors duration-300">
       <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
+
+      {/* ✅ FIX BUG 3 : Écran de sonnerie appel entrant */}
+      {incomingCall && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-white dark:bg-charcoal-dark rounded-3xl p-8 text-center shadow-2xl space-y-6 max-w-xs w-full mx-4 border border-emerald-medium/20 animate-fade-in">
+            {/* Avatar appelant */}
+            <div className="relative mx-auto w-20 h-20">
+              {callerAvatar ? (
+                <img src={callerAvatar} alt={callerName} className="w-20 h-20 rounded-full object-cover border-4 border-emerald-medium/30" />
+              ) : (
+                <div className="w-20 h-20 rounded-full bg-emerald-medium/10 flex items-center justify-center">
+                  <Phone className="w-10 h-10 text-emerald-medium" />
+                </div>
+              )}
+              {/* Cercle animé autour de l'avatar */}
+              <span className="absolute inset-0 rounded-full border-2 border-emerald-medium/40 animate-ping" />
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">
+                {incomingCall.mode === 'video' ? '📹 Appel vidéo entrant' : '📞 Appel audio entrant'}
+              </p>
+              <p className="font-serif text-2xl font-bold text-emerald-deep dark:text-cream-base">
+                {callerName}
+              </p>
+            </div>
+
+            {/* Boutons Refuser / Décrocher */}
+            <div className="flex gap-6 justify-center pt-2">
+              {/* Refuser */}
+              <div className="flex flex-col items-center gap-2">
+                <button
+                  onClick={handleDeclineCall}
+                  className="p-5 rounded-full bg-red-500 hover:bg-red-600 text-white active:scale-95 transition-all shadow-lg"
+                >
+                  <PhoneOff className="w-7 h-7" />
+                </button>
+                <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Refuser</span>
+              </div>
+              {/* Décrocher */}
+              <div className="flex flex-col items-center gap-2">
+                <button
+                  onClick={handleAcceptCall}
+                  className="p-5 rounded-full bg-emerald-medium hover:bg-emerald-deep text-white active:scale-95 transition-all shadow-lg"
+                >
+                  <Phone className="w-7 h-7" />
+                </button>
+                <span className="text-[10px] text-emerald-medium font-bold uppercase tracking-wide">Décrocher</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sidebar Desktop */}
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-20 flex-col items-center py-6 gap-8 border-r border-cream-darker dark:border-charcoal-light/10 bg-white/70 dark:bg-charcoal-card/70 backdrop-blur-md z-40">
@@ -809,7 +887,6 @@ export default function App() {
               onSendMessage={handleSendDirectMessage}
               onSimulateTyping={handleSimulateTyping}
               onSelectFriend={(friendId) => {
-                // Vider le badge rouge quand on ouvre la conversation
                 setUnreadCounts(prev => { const c = { ...prev }; delete c[friendId]; return c; });
               }}
               onStartCall={handleStartCall}

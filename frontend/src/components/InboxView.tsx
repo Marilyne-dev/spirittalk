@@ -43,18 +43,20 @@ export default function InboxView({
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  // ✅ FIX BUG 2 : on garde une ref sur le stream pour y accéder dans onstop
+  const streamRef = useRef<MediaStream | null>(null);
+  const recordingSecondsRef = useRef<number>(0); // ref pour capturer la durée dans onstop
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Typing debounce
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isTypingSentRef = useRef(false);
 
   const selectedFriend = friends.find(f => f.id === selectedFriendId);
 
-  // Scroll to bottom when messages change
+  // ✅ FIX BUG 1 : scroll déclenché sur messages.length pour capter les nouveaux msgs Pusher
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, selectedFriendId, liveTypingText]);
+  }, [messages.length, selectedFriendId, liveTypingText]);
 
   // Quand on ouvre une conversation → marquer comme lu
   useEffect(() => {
@@ -64,10 +66,17 @@ export default function InboxView({
     setLiveTypingText('');
   }, [selectedFriendId]);
 
-  // Timer enregistrement audio
+  // Timer enregistrement audio — on synchronise aussi la ref
   useEffect(() => {
     if (isRecording) {
-      timerRef.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000);
+      recordingSecondsRef.current = 0;
+      timerRef.current = setInterval(() => {
+        setRecordingSeconds(s => {
+          const next = s + 1;
+          recordingSecondsRef.current = next; // ✅ toujours à jour dans les closures
+          return next;
+        });
+      }, 1000);
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
     }
@@ -75,13 +84,10 @@ export default function InboxView({
   }, [isRecording]);
 
   // Écouter les événements Pusher pour le typing lettre par lettre
-  // On expose une fonction globale que pusherService peut appeler
   useEffect(() => {
-    // On stocke la fn dans window pour que pusherService puisse la déclencher
     (window as any).__inboxSetLiveTyping = (senderId: string, text: string) => {
       if (senderId === selectedFriendId) {
         setLiveTypingText(text);
-        // Effacer après 3 secondes d'inactivité
         if ((window as any).__liveTypingClear) clearTimeout((window as any).__liveTypingClear);
         (window as any).__liveTypingClear = setTimeout(() => setLiveTypingText(''), 3000);
       }
@@ -98,7 +104,6 @@ export default function InboxView({
 
     if (!selectedFriendId) return;
 
-    // Envoyer typing=true avec le texte en cours
     try {
       await fetch(`${(import.meta as any).env?.VITE_API_URL || 'https://marilyne.alwaysdata.net/spirittalk'}/api/direct-messages/typing`, {
         method: 'POST',
@@ -110,53 +115,68 @@ export default function InboxView({
         body: JSON.stringify({
           recipient_id: selectedFriendId,
           is_typing: val.length > 0,
-          live_text: val  // texte en direct lettre par lettre
+          live_text: val
         })
       });
     } catch {}
 
-    // Stop typing après 2s d'inactivité
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
       apiService.sendTypingStatus(selectedFriendId, false).catch(() => {});
     }, 2000);
   };
 
+  // ✅ FIX BUG 2 — startRecording : stocker le stream dans une ref
   const startRecording = async () => {
     setRecordingSeconds(0);
+    recordingSecondsRef.current = 0;
     setRecordedAudioUrl(null);
     audioChunksRef.current = [];
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream; // ✅ stocker le stream pour y accéder dans onstop
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
-        const url = URL.createObjectURL(blob);
-        setRecordedAudioUrl(url);
-        stream.getTracks().forEach(t => t.stop());
-      };
+      // ✅ NE PAS définir onstop ici — on le fait dans stopRecordingAndSend
+      //    pour capturer la durée exacte au moment de l'arrêt
       mediaRecorder.start();
       setIsRecording(true);
     } catch {
+      // Fallback si le micro est bloqué
       setIsRecording(true);
     }
   };
 
+  // ✅ FIX BUG 2 — stopRecordingAndSend : brancher onstop AVANT d'appeler stop()
+  //    pour garantir que l'URL blob est dispo avant d'envoyer
   const stopRecordingAndSend = () => {
     if (!isRecording) return;
     setIsRecording(false);
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-      setTimeout(() => {
-        const dur = formatDuration(recordingSeconds);
-        handleSendVoice(recordedAudioUrl || 'mock-audio', dur);
-      }, 200);
+
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== 'inactive') {
+      // Capturer la durée maintenant (la ref est toujours à jour)
+      const durationAtStop = recordingSecondsRef.current;
+
+      // ✅ Définir onstop ICI pour avoir accès à durationAtStop et streamRef
+      mr.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const url = URL.createObjectURL(blob);
+        setRecordedAudioUrl(url);
+        // Libérer le micro
+        streamRef.current?.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+        // ✅ Envoyer avec l'URL réelle, jamais null
+        handleSendVoice(url, formatDuration(durationAtStop));
+      };
+
+      mr.stop(); // ← déclenche onstop après la fin de collecte des chunks
     } else {
-      handleSendVoice('mock-audio', formatDuration(recordingSeconds || 4));
+      // Fallback micro indisponible
+      handleSendVoice('mock-audio', formatDuration(recordingSecondsRef.current || 4));
     }
   };
 
@@ -179,7 +199,6 @@ export default function InboxView({
     setInputText('');
     setAttachedImages([]);
     setLiveTypingText('');
-    // Signaler stop typing
     apiService.sendTypingStatus(selectedFriendId, false).catch(() => {});
   };
 
@@ -198,7 +217,6 @@ export default function InboxView({
          (m.senderId === selectedFriendId && m.recipientId === 'me')
   );
 
-  // Badge rouge total non lus pour l'icone messagerie (calculé à l'extérieur)
   const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
 
   return (
@@ -231,9 +249,7 @@ export default function InboxView({
             return (
               <button
                 key={friend.id}
-                onClick={() => {
-                  setSelectedFriendId(friend.id);
-                }}
+                onClick={() => setSelectedFriendId(friend.id)}
                 className={`w-full text-left p-3 rounded-2xl flex items-center gap-3 transition-all ${
                   selectedFriendId === friend.id
                     ? 'bg-emerald-medium/10 border border-emerald-medium/20 text-emerald-deep dark:text-gold-bright'
@@ -270,7 +286,6 @@ export default function InboxView({
                     </p>
                     <div className="flex items-center gap-1 shrink-0">
                       {lastMsg && <span className="text-[8px] text-slate-400">{lastMsg.timestamp}</span>}
-                      {/* Badge rouge non lus */}
                       {unread > 0 && (
                         <span className="bg-red-500 text-white text-[9px] font-black rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none">
                           {unread}
@@ -367,13 +382,18 @@ export default function InboxView({
                       <div className={`flex items-center gap-3 p-2 rounded-xl border ${isMe ? 'bg-white/10 border-white/20 text-white' : 'bg-emerald-medium/10 border-emerald-medium/10 text-emerald-deep dark:text-cream-base'}`}>
                         <button
                           onClick={() => {
+                            // ✅ FIX BUG 2 : jouer le vrai enregistrement, JAMAIS la voix IA
+                            // On joue le blob URL directement si disponible
+                            // On ne tombe JAMAIS dans speechSynthesis
                             if (msg.audioUrl && msg.audioUrl !== 'mock-audio') {
-                              new Audio(msg.audioUrl).play();
-                            } else if ('speechSynthesis' in window) {
-                              window.speechSynthesis.cancel();
-                              const u = new SpeechSynthesisUtterance("Que la paix de Dieu soit avec toi aujourd'hui !");
-                              u.lang = 'fr-FR';
-                              window.speechSynthesis.speak(u);
+                              const audio = new Audio(msg.audioUrl);
+                              audio.play().catch(() => {
+                                // Si le blob URL est expiré (session précédente), afficher message
+                                alert('Cet enregistrement audio n\'est plus disponible.');
+                              });
+                            } else {
+                              // mock-audio = micro indisponible au moment de l'enregistrement
+                              alert('Cet enregistrement n\'a pas pu être capturé (micro indisponible).');
                             }
                           }}
                           className={`p-2.5 rounded-full ${isMe ? 'bg-white text-[#1D3557]' : 'bg-emerald-medium text-white'}`}
@@ -395,13 +415,13 @@ export default function InboxView({
                       </div>
                     )}
 
-                    {/* Timestamp + coches bleues/grises */}
+                    {/* Timestamp + coches */}
                     <div className="flex justify-end items-center gap-1 opacity-70 text-[9px] mt-1">
                       <span>{msg.timestamp}</span>
                       {isMe && (
                         isRead
-                          ? <CheckCheck className="w-3.5 h-3.5 text-sky-400" />   /* Lu = bleu */
-                          : <CheckCheck className="w-3.5 h-3.5 text-slate-400" /> /* Envoyé = gris */
+                          ? <CheckCheck className="w-3.5 h-3.5 text-sky-400" />
+                          : <CheckCheck className="w-3.5 h-3.5 text-slate-400" />
                       )}
                     </div>
                   </div>
@@ -414,13 +434,11 @@ export default function InboxView({
               <div className="flex justify-start">
                 <div className="bg-white dark:bg-charcoal-dark border border-cream-darker dark:border-charcoal-light/10 rounded-2xl rounded-tl-none p-3 text-xs max-w-[75%]">
                   {liveTypingText ? (
-                    /* On voit ce que l'autre tape en direct */
                     <span className="text-slate-600 dark:text-cream-base font-sans italic">
                       {liveTypingText}
                       <span className="inline-block w-0.5 h-3 bg-emerald-medium ml-0.5 animate-pulse align-middle" />
                     </span>
                   ) : (
-                    /* Fallback : points animés classiques */
                     <div className="flex items-center gap-1.5 text-slate-400">
                       <span className="font-serif font-semibold text-emerald-medium text-[11px] animate-pulse">
                         {selectedFriend.name} écrit
