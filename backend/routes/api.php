@@ -70,29 +70,24 @@ Route::post('/gemini/chat', function (\Illuminate\Http\Request $request) {
     if (!$userMessage) {
         return response()->json(['error' => 'userMessage requis'], 400);
     }
-    $apiKey = env('GEMINI_API_KEY');
+    $apiKey = env('OPENROUTER_API_KEY');
     if (!$apiKey) {
-        return response()->json(['text' => '[Sagesse Divine] La paix soit avec vous. Que votre cœur trouve le calme dans la prière.'], 200);
+        return response()->json(['text' => '[Sagesse Divine] La paix soit avec vous.'], 200);
     }
-    $prompt = '';
+    $formattedMessages = [['role' => 'system', 'content' => "Tu es 'Sagesse Divine', un guide spirituel bienveillant sur SpiritTalk. Réponds en français avec amour et sérénité. Cite toujours un verset de la Bible ou du Coran avec sa référence précise. Reste œcuménique."]];
     foreach ($messages as $m) {
-        $sender = ($m['role'] ?? '') === 'user' ? 'Seeker' : 'Sagesse Divine';
-        $prompt .= $sender . ': ' . ($m['text'] ?? '') . "\n";
+        $formattedMessages[] = ['role' => ($m['role'] ?? 'user') === 'user' ? 'user' : 'assistant', 'content' => $m['text'] ?? ''];
     }
-    $prompt .= 'Seeker: ' . $userMessage . "\nSagesse Divine:";
-    $body = json_encode([
-        'contents' => [['parts' => [['text' => $prompt]]]],
-        'systemInstruction' => ['parts' => [['text' => "Tu es 'Sagesse Divine', un guide spirituel bienveillant sur SpiritTalk. Réponds en français avec amour et sérénité. Cite toujours un verset de la Bible ou du Coran avec sa référence précise. Reste œcuménique."]]],
-        'generationConfig' => ['temperature' => 0.7]
-    ]);
-    $opts = ['http' => ['method' => 'POST', 'header' => "Content-Type: application/json\r\n", 'content' => $body]];
-    $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . $apiKey;
+    $formattedMessages[] = ['role' => 'user', 'content' => $userMessage];
+    $body = json_encode(['model' => 'mistralai/mistral-7b-instruct:free', 'messages' => $formattedMessages]);
+    $opts = ['http' => ['method' => 'POST', 'header' => "Content-Type: application/json\r\nAuthorization: Bearer " . $apiKey . "\r\n", 'content' => $body]];
+    $url = 'https://openrouter.ai/api/v1/chat/completions';
     $result = @file_get_contents($url, false, stream_context_create($opts));
     if ($result === false) {
         return response()->json(['text' => 'Le service de sagesse est temporairement indisponible.'], 200);
     }
     $data = json_decode($result, true);
-    $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? 'Que la paix guide vos pas.';
+    $text = $data['choices'][0]['message']['content'] ?? 'Que la paix guide vos pas.';
     $refRegex = '/(Psaumes?|Matthieu|Coran|Sourate|Jean|Corinthiens|Philippiens|Proverbes|Galates|Al-[A-Za-z]+)\s+\d+:\d+/i';
     preg_match($refRegex, $text, $match);
     $scriptureQuote = null;
@@ -103,3 +98,46 @@ Route::post('/gemini/chat', function (\Illuminate\Http\Request $request) {
     }
     return response()->json(['text' => $text, 'scriptureQuote' => $scriptureQuote]);
 });
+
+Route::get('/bible', function (\Illuminate\Http\Request $request) {
+    $book = $request->query('book');
+    $chapter = $request->query('chapter');
+    if (!$book || !$chapter) {
+        return response()->json(['error' => 'book et chapter requis'], 400);
+    }
+    $url = 'https://labs.bible.org/api/?passage=' . urlencode($book) . '+' . urlencode($chapter) . '&type=json&formatting=plain';
+    $result = @file_get_contents($url);
+    if ($result === false) {
+        return response()->json(['error' => 'Bible API inaccessible'], 502);
+    }
+    $verses = json_decode($result, true);
+    $text = '';
+    foreach ($verses as $v) {
+        $text .= $v['verse'] . '. ' . $v['text'] . ' ';
+    }
+    return response()->json([
+        'reference' => ucfirst($book) . ' ' . $chapter,
+        'text' => trim($text),
+        'translation_name' => 'NET Bible (English)',
+        'verses' => $verses
+    ]);
+});
+
+Route::get('/quran', function (\Illuminate\Http\Request $request) {
+    $surah = $request->query('surah');
+    $ayah = $request->query('ayah');
+    if (!$surah) {
+        return response()->json(['error' => 'surah requis'], 400);
+    }
+    $url = $ayah
+        ? 'https://api.alquran.cloud/v1/ayah/' . $surah . ':' . $ayah . '/fr.hamidullah'
+        : 'https://api.alquran.cloud/v1/surah/' . $surah . '/fr.hamidullah';
+    $result = @file_get_contents($url);
+    if ($result === false) {
+        return response()->json(['error' => 'Coran API inaccessible'], 502);
+    }
+    return response($result, 200)->header('Content-Type', 'application/json');
+});
+
+
+
