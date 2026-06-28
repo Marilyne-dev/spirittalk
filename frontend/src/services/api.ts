@@ -25,13 +25,20 @@ const getHeaders = () => {
 export const apiService = {
   // --- AUTHENTICATION ---
   async login(email: string, password: string) {
+    // Vider l'ancien token avant login (évite le 401 avec un token mock/expiré)
+    localStorage.removeItem('spirittalk_token');
     try {
       const response = await fetch(`${API_BASE_URL}/login`, {
         method: 'POST',
-        headers: getHeaders(),
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      if (!response.ok) throw new Error('Identifiants invalides ou serveur injoignable');
+      if (response.status === 401 || response.status === 422) {
+        const err = await response.json().catch(() => ({}));
+        const msg = err?.errors?.email?.[0] || err?.message || 'Identifiants invalides';
+        throw new Error(msg);
+      }
+      if (!response.ok) throw new Error('Serveur injoignable');
       const data = await response.json();
       if (data.token) {
         localStorage.setItem('spirittalk_token', data.token);
@@ -74,12 +81,19 @@ export const apiService = {
   },
 
   async register(name: string, username: string, email: string, password: string, religion: 'Chrétienne' | 'Musulmane' | 'Mixte') {
+    localStorage.removeItem('spirittalk_token');
     try {
       const response = await fetch(`${API_BASE_URL}/register`, {
         method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ name, username, email, password, religion }),
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ name, username, email, password, password_confirmation: password, religion }),
       });
+      if (response.status === 422) {
+        const err = await response.json().catch(() => ({}));
+        const firstError = err?.errors ? Object.values(err.errors)[0] : null;
+        const msg = (Array.isArray(firstError) ? firstError[0] : null) || err?.message || 'Données invalides';
+        throw new Error(msg);
+      }
       if (!response.ok) throw new Error('Erreur lors de l\'inscription');
       const data = await response.json();
       if (data.token) {
