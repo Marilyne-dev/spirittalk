@@ -124,8 +124,6 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<'home' | 'community' | 'inbox' | 'chat' | 'search' | 'profile'>('home');
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const [activeCall, setActiveCall] = useState<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
-
-  // ✅ FIX BUG 3 : état pour l'appel entrant (écran de sonnerie)
   const [incomingCall, setIncomingCall] = useState<{ peerId: string; mode: 'audio' | 'video'; signal: any } | null>(null);
 
   const peerConnectionRef = useRef<any>(null);
@@ -218,7 +216,7 @@ export default function App() {
     }).catch(() => {});
   }, [user]);
 
-  // ✅ FIX BUG 3 : accepter l'appel entrant après clic sur "Décrocher"
+  // Accepter l'appel entrant
   const handleAcceptCall = useCallback(async () => {
     if (!incomingCall) return;
     const { peerId, signal } = incomingCall;
@@ -252,7 +250,6 @@ export default function App() {
     }
   }, [incomingCall]);
 
-  // ✅ FIX BUG 3 : refuser l'appel
   const handleDeclineCall = useCallback(() => {
     setIncomingCall(null);
   }, []);
@@ -262,15 +259,11 @@ export default function App() {
     if (!user) return;
 
     const pusher = pusherService.initialize(
-      // === NOUVEAU MESSAGE REÇU ===
       (newMsg) => {
         const myId = String(user.id);
         const rawSenderId = String(newMsg.senderId);
-
-        // Si c'est MOI qui ai envoyé → ignorer (déjà ajouté localement)
         if (rawSenderId === myId) return;
 
-        // ✅ FIX BUG 1 : ID unique stable pour éviter les doublons React
         const mappedMsg: DirectMessage = {
           id: newMsg.id ? String(newMsg.id) : `dm_pusher_${rawSenderId}_${Date.now()}`,
           senderId: rawSenderId,
@@ -284,19 +277,16 @@ export default function App() {
         };
 
         setDirectMessages(prev => {
-          // Dédoublonner sur l'ID
           if (prev.some(m => m.id === mappedMsg.id)) return prev;
           return [...prev, mappedMsg];
         });
 
-        // Incrémenter badge non lus
         setUnreadCounts(prev => ({
           ...prev,
           [rawSenderId]: (prev[rawSenderId] || 0) + 1
         }));
       },
 
-      // === NOUVEAU POST COMMUNAUTÉ ===
       (newPost) => {
         if (newPost.username !== user.username) {
           setPosts(prev => {
@@ -306,7 +296,6 @@ export default function App() {
         }
       },
 
-      // === TYPING STATUS ===
       (friendId, isTyping, liveText?: string) => {
         setFriends(prev => prev.map(f => f.id === String(friendId) ? { ...f, isTyping } : f));
         if (liveText !== undefined && (window as any).__inboxSetLiveTyping) {
@@ -314,19 +303,17 @@ export default function App() {
         }
       },
 
-      // === SIGNAL APPEL WebRTC ===
       async (callPayload) => {
         if (!user) return;
         const peerId = String(callPayload.senderId);
 
-        // ✅ FIX BUG 3 : afficher l'écran de sonnerie au lieu d'accepter automatiquement
         if (callPayload.type === 'offer' && peerId !== String(user.id)) {
           setIncomingCall({
             peerId,
             mode: callPayload.signal?.type === 'video' ? 'video' : 'audio',
             signal: callPayload.signal
           });
-          return; // ← ne pas accepter automatiquement
+          return;
         }
 
         if (callPayload.type === 'answer' && peerConnectionRef.current) {
@@ -569,6 +556,7 @@ export default function App() {
 
   const handleLogout = async () => {
     await apiService.logout();
+    localStorage.removeItem('spirittalk_user');
     setUser(null);
   };
 
@@ -739,11 +727,7 @@ export default function App() {
     setTimeout(() => setFriends(prev => prev.map(f => f.id === recipientId ? { ...f, isTyping: false } : f)), 2000);
   };
 
-  if (!user) {
-    return <AuthView onAuthSuccess={(authenticatedUser) => setUser(authenticatedUser)} />;
-  }
-
-  // Trouver le nom de l'appelant pour l'écran de sonnerie
+  // Nom et avatar de l'appelant pour l'écran de sonnerie
   const callerName = incomingCall
     ? (friends.find(f => f.id === incomingCall.peerId)?.name || 'Quelqu\'un vous appelle')
     : '';
@@ -752,186 +736,196 @@ export default function App() {
     : '';
 
   return (
-    <div className="min-h-screen bg-cream-base dark:bg-charcoal-dark text-slate-800 dark:text-cream-base flex flex-col md:flex-row transition-colors duration-300">
-      <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
-
-      {/* ✅ FIX BUG 3 : Écran de sonnerie appel entrant */}
-      {incomingCall && (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="bg-white dark:bg-charcoal-dark rounded-3xl p-8 text-center shadow-2xl space-y-6 max-w-xs w-full mx-4 border border-emerald-medium/20 animate-fade-in">
-            {/* Avatar appelant */}
-            <div className="relative mx-auto w-20 h-20">
-              {callerAvatar ? (
-                <img src={callerAvatar} alt={callerName} className="w-20 h-20 rounded-full object-cover border-4 border-emerald-medium/30" />
-              ) : (
-                <div className="w-20 h-20 rounded-full bg-emerald-medium/10 flex items-center justify-center">
-                  <Phone className="w-10 h-10 text-emerald-medium" />
-                </div>
-              )}
-              {/* Cercle animé autour de l'avatar */}
-              <span className="absolute inset-0 rounded-full border-2 border-emerald-medium/40 animate-ping" />
-            </div>
-
-            <div className="space-y-1">
-              <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">
-                {incomingCall.mode === 'video' ? '📹 Appel vidéo entrant' : '📞 Appel audio entrant'}
-              </p>
-              <p className="font-serif text-2xl font-bold text-emerald-deep dark:text-cream-base">
-                {callerName}
-              </p>
-            </div>
-
-            {/* Boutons Refuser / Décrocher */}
-            <div className="flex gap-6 justify-center pt-2">
-              {/* Refuser */}
-              <div className="flex flex-col items-center gap-2">
-                <button
-                  onClick={handleDeclineCall}
-                  className="p-5 rounded-full bg-red-500 hover:bg-red-600 text-white active:scale-95 transition-all shadow-lg"
-                >
-                  <PhoneOff className="w-7 h-7" />
-                </button>
-                <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Refuser</span>
-              </div>
-              {/* Décrocher */}
-              <div className="flex flex-col items-center gap-2">
-                <button
-                  onClick={handleAcceptCall}
-                  className="p-5 rounded-full bg-emerald-medium hover:bg-emerald-deep text-white active:scale-95 transition-all shadow-lg"
-                >
-                  <Phone className="w-7 h-7" />
-                </button>
-                <span className="text-[10px] text-emerald-medium font-bold uppercase tracking-wide">Décrocher</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Sidebar Desktop */}
-      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-20 flex-col items-center py-6 gap-8 border-r border-cream-darker dark:border-charcoal-light/10 bg-white/70 dark:bg-charcoal-card/70 backdrop-blur-md z-40">
-        <div className="flex items-center gap-1 font-serif text-emerald-deep dark:text-gold-bright font-bold py-2 shrink-0 text-sm">
-          <span>S</span><span>T</span>
-        </div>
-
-        <div className="flex-grow flex flex-col justify-center gap-6">
-          {[
-            { tab: 'home', icon: <Home className="w-5 h-5" />, title: 'Accueil' },
-            { tab: 'community', icon: <Users className="w-5 h-5" />, title: 'Communauté' },
-            { tab: 'inbox', icon: <MessageCircle className="w-5 h-5" />, title: 'Messagerie', badge: Object.values(unreadCounts).reduce((a, b) => a + b, 0) },
-            { tab: 'chat', icon: <Sparkles className="w-5 h-5" />, title: 'Guidance IA' },
-            { tab: 'search', icon: <Search className="w-5 h-5" />, title: 'Rechercher' },
-            { tab: 'profile', icon: <User className="w-5 h-5" />, title: 'Mon Profil' },
-          ].map(({ tab, icon, title, badge }) => (
-            <button
-              key={tab}
-              onClick={() => setCurrentTab(tab as any)}
-              className={`p-3 rounded-xl transition-all relative ${
-                currentTab === tab
-                  ? "bg-emerald-medium text-white dark:bg-emerald-fixed dark:text-charcoal-dark shadow-md scale-110"
-                  : "text-slate-400 hover:text-emerald-medium dark:hover:text-gold-bright hover:bg-cream-darker dark:hover:bg-charcoal-light/20"
-              }`}
-              title={title}
-            >
-              {icon}
-              {badge && badge > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black rounded-full px-1 min-w-[16px] text-center">
-                  {badge}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        <button
-          onClick={() => setDarkMode(prev => !prev)}
-          className="p-3 text-slate-400 hover:text-emerald-medium dark:hover:text-gold-bright rounded-xl hover:bg-cream-darker dark:hover:bg-charcoal-light/20 transition-all"
-          title="Changer de thème"
-        >
-          {darkMode ? <Sun className="w-5 h-5 text-gold-bright" /> : <Moon className="w-5 h-5" />}
-        </button>
-      </aside>
-
-      {/* Main Content */}
-      <div className="flex-grow md:pl-20 flex flex-col">
-        <header className="sticky top-0 w-full z-40 flex justify-between items-center px-4 md:px-8 h-16 bg-cream-base/80 dark:bg-charcoal-dark/85 backdrop-blur-md border-b border-cream-darker dark:border-charcoal-light/10">
-          <h1 className="font-serif text-xl md:text-2xl font-bold tracking-tight text-emerald-deep dark:text-gold-bright">SpiritTalk</h1>
-          <div className="flex items-center gap-2">
-            <div className="hidden sm:flex items-center gap-1 bg-emerald-medium/5 dark:bg-charcoal-card px-3 py-1.5 rounded-lg border border-emerald-medium/10">
-              <Award className="w-3.5 h-3.5 text-gold-deep dark:text-gold-bright" />
-              <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-medium dark:text-cream-base/75">{xp} XP</span>
-            </div>
-            <button onClick={() => setDarkMode(prev => !prev)} className="md:hidden p-2 text-slate-500 dark:text-cream-base/60 hover:bg-cream-darker dark:hover:bg-charcoal-light/25 rounded-lg transition-colors">
-              {darkMode ? <Sun className="w-4 h-4 text-gold-bright" /> : <Moon className="w-4 h-4" />}
-            </button>
-            <button onClick={handleNotificationClick} className="p-2 text-slate-500 dark:text-cream-base/60 hover:bg-cream-darker dark:hover:bg-charcoal-light/25 rounded-lg transition-colors relative">
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-gold-deep rounded-full animate-ping" />
-            </button>
-          </div>
-        </header>
-
-        <main className="flex-grow p-4 md:p-8 max-w-[1000px] mx-auto w-full">
-          {currentTab === 'home' && (
-            <HomeView user={user} xp={xp} streak={streak} onOpenQuiz={() => setIsQuizOpen(true)} onSelectInspiration={setSelectedInspiration} onBookmark={handleAddBookmark} onAddXP={handleAddXP} onNavigateToChatWithQuery={handleNavigateToChatWithQuery} posts={posts} onAddPost={handleCreatePost} onLikePost={handleLikePost} />
-          )}
-          {currentTab === 'community' && (
-            <CommunityView user={user} posts={posts} friends={friends} notifications={notifications} onAddPost={handleCreatePost} onLikePost={handleLikePost} onAddComment={handleAddComment} onSendFriendRequest={handleSendFriendRequest} onAcceptFriendRequest={handleAcceptFriendRequest} onRemoveFriend={handleRemoveFriend} onClearNotification={(notifId) => setNotifications(prev => prev.filter(n => n.id !== notifId))} onNavigateToChat={() => setCurrentTab('inbox')} onSearchMembers={handleSearchMembers} />
-          )}
-          {currentTab === 'inbox' && (
-            <InboxView
-              user={user}
-              friends={friends}
-              messages={directMessages}
-              unreadCounts={unreadCounts}
-              onSendMessage={handleSendDirectMessage}
-              onSimulateTyping={handleSimulateTyping}
-              onSelectFriend={(friendId) => {
-                setUnreadCounts(prev => { const c = { ...prev }; delete c[friendId]; return c; });
-              }}
-              onStartCall={handleStartCall}
-            />
-          )}
-          {currentTab === 'chat' && (
-            <ChatView messages={chatMessages} onSendMessage={handleSendMessage} onBookmark={handleAddBookmark} isGenerating={isGenerating} />
-          )}
-          {currentTab === 'search' && (
-            <SearchView onBookmark={handleAddBookmark} onNavigateToChatWithQuery={handleNavigateToChatWithQuery} />
-          )}
-          {currentTab === 'profile' && (
-            <ProfileView user={user} xp={xp} streak={streak} bookmarks={bookmarks} notes={notes} onCheckIn={handleCheckIn} onRemoveBookmark={handleRemoveBookmark} onAddNote={handleAddNote} onDeleteNote={handleDeleteNote} onNavigateToChatWithQuery={handleNavigateToChatWithQuery} hasCheckedInToday={hasCheckedInToday} onUpdateProfile={handleUpdateProfile} onLogout={handleLogout} />
-          )}
-        </main>
+    <>
+      {/* ✅ FIX CRITIQUE : AuthView toujours dans le DOM — jamais démontée brutalement.
+          On la cache avec display:none quand l'utilisateur est connecté.
+          Framer Motion ne peut plus crasher sur removeChild car les nœuds restent en place. */}
+      <div style={{ display: user ? 'none' : 'block' }}>
+        <AuthView onAuthSuccess={(authenticatedUser) => {
+          localStorage.setItem('spirittalk_user', JSON.stringify(authenticatedUser));
+          setUser(authenticatedUser);
+        }} />
       </div>
 
-      {/* Bottom Nav Mobile */}
-      <nav className="md:hidden fixed bottom-0 w-full z-50 flex justify-around items-center h-20 pb-safe bg-cream-base/90 dark:bg-charcoal-card/90 backdrop-blur-md border-t border-cream-darker dark:border-charcoal-light/10 shadow-lg">
-        {[
-          { tab: 'home', icon: <Home className="w-5 h-5 mb-1" />, label: 'Accueil' },
-          { tab: 'community', icon: <Users className="w-5 h-5 mb-1" />, label: 'Communauté' },
-          { tab: 'inbox', icon: <MessageCircle className="w-5 h-5 mb-1" />, label: 'Messages', badge: Object.values(unreadCounts).reduce((a, b) => a + b, 0) },
-          { tab: 'chat', icon: <Sparkles className="w-5 h-5 mb-1" />, label: 'IA' },
-          { tab: 'search', icon: <Search className="w-5 h-5 mb-1" />, label: 'Étude' },
-          { tab: 'profile', icon: <User className="w-5 h-5 mb-1" />, label: 'Profil' },
-        ].map(({ tab, icon, label, badge }) => (
-          <button
-            key={tab}
-            onClick={() => setCurrentTab(tab as any)}
-            className={`flex flex-col items-center justify-center p-2 text-xs font-semibold relative ${currentTab === tab ? "text-emerald-deep dark:text-gold-bright" : "text-slate-400 hover:text-slate-600"}`}
-          >
-            {icon}
-            <span className="text-[9px] tracking-wide font-medium">{label}</span>
-            {badge && badge > 0 && (
-              <span className="absolute top-1 right-1 bg-red-500 text-white text-[8px] font-black rounded-full px-1 min-w-[14px] text-center">
-                {badge}
-              </span>
-            )}
-          </button>
-        ))}
-      </nav>
+      {/* ✅ App principale : cachée tant que l'utilisateur n'est pas connecté */}
+      <div style={{ display: user ? 'block' : 'none' }}>
+        <div className="min-h-screen bg-cream-base dark:bg-charcoal-dark text-slate-800 dark:text-cream-base flex flex-col md:flex-row transition-colors duration-300">
+          <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
 
-      <QuizModal isOpen={isQuizOpen} onClose={() => setIsQuizOpen(false)} onQuizComplete={(xpGained) => { handleAddXP(xpGained); if (!hasCheckedInToday) { setHasCheckedInToday(true); setStreak(prev => prev + 1); } }} />
-      <InspirationModal card={selectedInspiration} onClose={() => setSelectedInspiration(null)} onBookmark={handleAddBookmark} />
-    </div>
+          {/* Écran de sonnerie appel entrant */}
+          {incomingCall && (
+            <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+              <div className="bg-white dark:bg-charcoal-dark rounded-3xl p-8 text-center shadow-2xl space-y-6 max-w-xs w-full mx-4 border border-emerald-medium/20 animate-fade-in">
+                <div className="relative mx-auto w-20 h-20">
+                  {callerAvatar ? (
+                    <img src={callerAvatar} alt={callerName} className="w-20 h-20 rounded-full object-cover border-4 border-emerald-medium/30" />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full bg-emerald-medium/10 flex items-center justify-center">
+                      <Phone className="w-10 h-10 text-emerald-medium" />
+                    </div>
+                  )}
+                  <span className="absolute inset-0 rounded-full border-2 border-emerald-medium/40 animate-ping" />
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">
+                    {incomingCall.mode === 'video' ? '📹 Appel vidéo entrant' : '📞 Appel audio entrant'}
+                  </p>
+                  <p className="font-serif text-2xl font-bold text-emerald-deep dark:text-cream-base">
+                    {callerName}
+                  </p>
+                </div>
+
+                <div className="flex gap-6 justify-center pt-2">
+                  <div className="flex flex-col items-center gap-2">
+                    <button
+                      onClick={handleDeclineCall}
+                      className="p-5 rounded-full bg-red-500 hover:bg-red-600 text-white active:scale-95 transition-all shadow-lg"
+                    >
+                      <PhoneOff className="w-7 h-7" />
+                    </button>
+                    <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Refuser</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-2">
+                    <button
+                      onClick={handleAcceptCall}
+                      className="p-5 rounded-full bg-emerald-medium hover:bg-emerald-deep text-white active:scale-95 transition-all shadow-lg"
+                    >
+                      <Phone className="w-7 h-7" />
+                    </button>
+                    <span className="text-[10px] text-emerald-medium font-bold uppercase tracking-wide">Décrocher</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Sidebar Desktop */}
+          <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-20 flex-col items-center py-6 gap-8 border-r border-cream-darker dark:border-charcoal-light/10 bg-white/70 dark:bg-charcoal-card/70 backdrop-blur-md z-40">
+            <div className="flex items-center gap-1 font-serif text-emerald-deep dark:text-gold-bright font-bold py-2 shrink-0 text-sm">
+              <span>S</span><span>T</span>
+            </div>
+
+            <div className="flex-grow flex flex-col justify-center gap-6">
+              {[
+                { tab: 'home', icon: <Home className="w-5 h-5" />, title: 'Accueil' },
+                { tab: 'community', icon: <Users className="w-5 h-5" />, title: 'Communauté' },
+                { tab: 'inbox', icon: <MessageCircle className="w-5 h-5" />, title: 'Messagerie', badge: Object.values(unreadCounts).reduce((a, b) => a + b, 0) },
+                { tab: 'chat', icon: <Sparkles className="w-5 h-5" />, title: 'Guidance IA' },
+                { tab: 'search', icon: <Search className="w-5 h-5" />, title: 'Rechercher' },
+                { tab: 'profile', icon: <User className="w-5 h-5" />, title: 'Mon Profil' },
+              ].map(({ tab, icon, title, badge }) => (
+                <button
+                  key={tab}
+                  onClick={() => setCurrentTab(tab as any)}
+                  className={`p-3 rounded-xl transition-all relative ${
+                    currentTab === tab
+                      ? "bg-emerald-medium text-white dark:bg-emerald-fixed dark:text-charcoal-dark shadow-md scale-110"
+                      : "text-slate-400 hover:text-emerald-medium dark:hover:text-gold-bright hover:bg-cream-darker dark:hover:bg-charcoal-light/20"
+                  }`}
+                  title={title}
+                >
+                  {icon}
+                  {badge && badge > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black rounded-full px-1 min-w-[16px] text-center">
+                      {badge}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setDarkMode(prev => !prev)}
+              className="p-3 text-slate-400 hover:text-emerald-medium dark:hover:text-gold-bright rounded-xl hover:bg-cream-darker dark:hover:bg-charcoal-light/20 transition-all"
+              title="Changer de thème"
+            >
+              {darkMode ? <Sun className="w-5 h-5 text-gold-bright" /> : <Moon className="w-5 h-5" />}
+            </button>
+          </aside>
+
+          {/* Main Content */}
+          <div className="flex-grow md:pl-20 flex flex-col">
+            <header className="sticky top-0 w-full z-40 flex justify-between items-center px-4 md:px-8 h-16 bg-cream-base/80 dark:bg-charcoal-dark/85 backdrop-blur-md border-b border-cream-darker dark:border-charcoal-light/10">
+              <h1 className="font-serif text-xl md:text-2xl font-bold tracking-tight text-emerald-deep dark:text-gold-bright">SpiritTalk</h1>
+              <div className="flex items-center gap-2">
+                <div className="hidden sm:flex items-center gap-1 bg-emerald-medium/5 dark:bg-charcoal-card px-3 py-1.5 rounded-lg border border-emerald-medium/10">
+                  <Award className="w-3.5 h-3.5 text-gold-deep dark:text-gold-bright" />
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-medium dark:text-cream-base/75">{xp} XP</span>
+                </div>
+                <button onClick={() => setDarkMode(prev => !prev)} className="md:hidden p-2 text-slate-500 dark:text-cream-base/60 hover:bg-cream-darker dark:hover:bg-charcoal-light/25 rounded-lg transition-colors">
+                  {darkMode ? <Sun className="w-4 h-4 text-gold-bright" /> : <Moon className="w-4 h-4" />}
+                </button>
+                <button onClick={handleNotificationClick} className="p-2 text-slate-500 dark:text-cream-base/60 hover:bg-cream-darker dark:hover:bg-charcoal-light/25 rounded-lg transition-colors relative">
+                  <Bell className="w-4 h-4" />
+                  <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-gold-deep rounded-full animate-ping" />
+                </button>
+              </div>
+            </header>
+
+            <main className="flex-grow p-4 md:p-8 max-w-[1000px] mx-auto w-full">
+              {currentTab === 'home' && (
+                <HomeView user={user} xp={xp} streak={streak} onOpenQuiz={() => setIsQuizOpen(true)} onSelectInspiration={setSelectedInspiration} onBookmark={handleAddBookmark} onAddXP={handleAddXP} onNavigateToChatWithQuery={handleNavigateToChatWithQuery} posts={posts} onAddPost={handleCreatePost} onLikePost={handleLikePost} />
+              )}
+              {currentTab === 'community' && (
+                <CommunityView user={user} posts={posts} friends={friends} notifications={notifications} onAddPost={handleCreatePost} onLikePost={handleLikePost} onAddComment={handleAddComment} onSendFriendRequest={handleSendFriendRequest} onAcceptFriendRequest={handleAcceptFriendRequest} onRemoveFriend={handleRemoveFriend} onClearNotification={(notifId) => setNotifications(prev => prev.filter(n => n.id !== notifId))} onNavigateToChat={() => setCurrentTab('inbox')} onSearchMembers={handleSearchMembers} />
+              )}
+              {currentTab === 'inbox' && (
+                <InboxView
+                  user={user}
+                  friends={friends}
+                  messages={directMessages}
+                  unreadCounts={unreadCounts}
+                  onSendMessage={handleSendDirectMessage}
+                  onSimulateTyping={handleSimulateTyping}
+                  onSelectFriend={(friendId) => {
+                    setUnreadCounts(prev => { const c = { ...prev }; delete c[friendId]; return c; });
+                  }}
+                  onStartCall={handleStartCall}
+                />
+              )}
+              {currentTab === 'chat' && (
+                <ChatView messages={chatMessages} onSendMessage={handleSendMessage} onBookmark={handleAddBookmark} isGenerating={isGenerating} />
+              )}
+              {currentTab === 'search' && (
+                <SearchView onBookmark={handleAddBookmark} onNavigateToChatWithQuery={handleNavigateToChatWithQuery} />
+              )}
+              {currentTab === 'profile' && (
+                <ProfileView user={user} xp={xp} streak={streak} bookmarks={bookmarks} notes={notes} onCheckIn={handleCheckIn} onRemoveBookmark={handleRemoveBookmark} onAddNote={handleAddNote} onDeleteNote={handleDeleteNote} onNavigateToChatWithQuery={handleNavigateToChatWithQuery} hasCheckedInToday={hasCheckedInToday} onUpdateProfile={handleUpdateProfile} onLogout={handleLogout} />
+              )}
+            </main>
+          </div>
+
+          {/* Bottom Nav Mobile */}
+          <nav className="md:hidden fixed bottom-0 w-full z-50 flex justify-around items-center h-20 pb-safe bg-cream-base/90 dark:bg-charcoal-card/90 backdrop-blur-md border-t border-cream-darker dark:border-charcoal-light/10 shadow-lg">
+            {[
+              { tab: 'home', icon: <Home className="w-5 h-5 mb-1" />, label: 'Accueil' },
+              { tab: 'community', icon: <Users className="w-5 h-5 mb-1" />, label: 'Communauté' },
+              { tab: 'inbox', icon: <MessageCircle className="w-5 h-5 mb-1" />, label: 'Messages', badge: Object.values(unreadCounts).reduce((a, b) => a + b, 0) },
+              { tab: 'chat', icon: <Sparkles className="w-5 h-5 mb-1" />, label: 'IA' },
+              { tab: 'search', icon: <Search className="w-5 h-5 mb-1" />, label: 'Étude' },
+              { tab: 'profile', icon: <User className="w-5 h-5 mb-1" />, label: 'Profil' },
+            ].map(({ tab, icon, label, badge }) => (
+              <button
+                key={tab}
+                onClick={() => setCurrentTab(tab as any)}
+                className={`flex flex-col items-center justify-center p-2 text-xs font-semibold relative ${currentTab === tab ? "text-emerald-deep dark:text-gold-bright" : "text-slate-400 hover:text-slate-600"}`}
+              >
+                {icon}
+                <span className="text-[9px] tracking-wide font-medium">{label}</span>
+                {badge && badge > 0 && (
+                  <span className="absolute top-1 right-1 bg-red-500 text-white text-[8px] font-black rounded-full px-1 min-w-[14px] text-center">
+                    {badge}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
+
+          <QuizModal isOpen={isQuizOpen} onClose={() => setIsQuizOpen(false)} onQuizComplete={(xpGained) => { handleAddXP(xpGained); if (!hasCheckedInToday) { setHasCheckedInToday(true); setStreak(prev => prev + 1); } }} />
+          <InspirationModal card={selectedInspiration} onClose={() => setSelectedInspiration(null)} onBookmark={handleAddBookmark} />
+        </div>
+      </div>
+    </>
   );
 }
