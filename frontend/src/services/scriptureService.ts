@@ -134,7 +134,7 @@ export const scriptureService = {
       // 1. Try server proxy first (bypasses CORS perfectly in fullstack)
       let res;
       try {
-        res = await fetch(`/api/bible?book=${bookId}&chapter=${chapter}`);
+        res = await fetch(`https://marilyne.alwaysdata.net/spirittalk/api/bible?book=${bookId}&chapter=${chapter}`);
       } catch (e) {
         console.warn("Express proxy not available, fetching directly", e);
       }
@@ -157,8 +157,8 @@ export const scriptureService = {
         }
       }
 
-      if (!res.ok) throw new Error("Impossible de récupérer ce chapitre.");
-      const data = await res.json();
+      if (!res || !res.ok) throw new Error("Impossible de récupérer ce chapitre.");
+      const data = await res!.json();
       
       if (data.verses && data.verses.length > 0) {
         return data.verses.map((v: any) => ({
