@@ -2,7 +2,7 @@ import { Bookmark, Note, ReadingPlan, ChatMessage } from '../types';
 
 // The API base URL defaults to the user's Laravel backend on AlwaysData
 // Users can configure this in their .env as VITE_API_URL
-const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'https://marilyne.alwaysdata.net/api';
+const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'https://marilyne.alwaysdata.net/spirittalk';
 
 // Simple helper to get headers with Sanctum token if present
 const getHeaders = () => {

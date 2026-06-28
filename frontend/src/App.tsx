@@ -281,7 +281,7 @@ export default function App() {
     // Register this active user session on the local shared server for live multi-user visibility
     const registerOnLocalServer = async () => {
       try {
-        await fetch('/api/users/register', {
+        await fetch('https://marilyne.alwaysdata.net/spirittalk/api/users/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -302,7 +302,7 @@ export default function App() {
     registerOnLocalServer();
 
     // Establish SSE event connection
-    const eventSource = new EventSource('/api/chat/stream');
+    const eventSource = new EventSource('https://marilyne.alwaysdata.net/spirittalk/api/chat/stream');
 
     eventSource.onmessage = (event) => {
       try {
@@ -757,7 +757,7 @@ export default function App() {
       let isSuccess = false;
 
       try {
-        const response = await fetch('/api/gemini/chat', {
+        const response = await fetch('https://marilyne.alwaysdata.net/spirittalk/api/gemini/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
