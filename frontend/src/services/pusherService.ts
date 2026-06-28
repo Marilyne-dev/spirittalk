@@ -41,22 +41,22 @@ export const pusherService = {
   initialize(
     onNewMessage: (msg: PusherMessagePayload) => void,
     onNewPost: (post: PusherPostPayload) => void,
-    onFriendTyping: (friendId: string, isTyping: boolean, recipientId: string) => void,
+    // 3ème arg = liveText (texte en cours de frappe, lettre par lettre)
+    onFriendTyping: (friendId: string, isTyping: boolean, liveText?: string) => void,
     onCallSignal?: (payload: PusherCallPayload) => void
   ) {
-    console.log('🔔 Initializing real-time synchronization with Pusher...', { key: PUSHER_KEY, cluster: PUSHER_CLUSTER });
-    
+    console.log('🔔 Initializing Pusher...', { key: PUSHER_KEY, cluster: PUSHER_CLUSTER });
+
     try {
       const pusher = new Pusher(PUSHER_KEY, {
         cluster: PUSHER_CLUSTER,
         forceTLS: true,
       });
 
-      // 1. Subscribe to Community channel
+      // 1. Canal communauté
       const communityChannel = pusher.subscribe('spirittalk-community');
-      
       communityChannel.bind('new-post', (data: any) => {
-        console.log('🌍 [Pusher] New community post received:', data);
+        console.log('🌍 [Pusher] New post:', data);
         onNewPost({
           id: data.id || `post_pusher_${Date.now()}`,
           name: data.name || 'Anonyme',
@@ -74,39 +74,41 @@ export const pusherService = {
         });
       });
 
-      // 2. Subscribe to shared messaging channel
+      // 2. Canal messagerie
       const chatChannel = pusher.subscribe('spirittalk-chat');
 
       chatChannel.bind('new-message', (data: any) => {
-        console.log('💬 [Pusher] New direct message received:', data);
+        console.log('💬 [Pusher] New message:', data);
+        // Le backend broadcast envoie { message: { senderId, recipientId, ... } }
+        // On supporte les deux formats
+        const msg = data.message || data;
         onNewMessage({
-          id: data.id || `dm_pusher_${Date.now()}`,
-          senderId: data.senderId,
-          recipientId: data.recipientId,
-          text: data.text,
-          images: data.images,
-          audioUrl: data.audioUrl,
-          audioDuration: data.audioDuration,
-          timestamp: data.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          id: msg.id || `dm_pusher_${Date.now()}`,
+          senderId: String(msg.senderId),
+          recipientId: String(msg.recipientId),
+          text: msg.text,
+          images: msg.images,
+          audioUrl: msg.audioUrl,
+          audioDuration: msg.audioDuration,
+          timestamp: msg.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         });
       });
 
       chatChannel.bind('typing-status', (data: any) => {
-        console.log('✍️ [Pusher] Typing status received:', data);
+        console.log('✍️ [Pusher] Typing:', data);
         const senderId = data.senderId || data.userId;
-        const recipientId = data.recipientId ?? data.recipient_id;
-        if (senderId && recipientId) {
-          onFriendTyping(String(senderId), !!data.isTyping, String(recipientId));
-        }
+        if (!senderId) return;
+
+        // liveText = texte en cours de frappe envoyé lettre par lettre
+        const liveText: string | undefined = data.liveText ?? data.live_text ?? undefined;
+
+        onFriendTyping(String(senderId), !!data.isTyping, liveText);
       });
 
+      // 3. Canal appels
       const callChannel = pusher.subscribe('spirittalk-calls');
       callChannel.bind('call-signal', (data: any) => {
-        console.log('📞 [Pusher] Call signal received:', data);
-        if (!data || !data.recipientId) {
-          onCallSignal?.(data);
-          return;
-        }
+        console.log('📞 [Pusher] Call signal:', data);
         onCallSignal?.({
           senderId: data.senderId,
           recipientId: data.recipientId,
@@ -116,12 +118,12 @@ export const pusherService = {
       });
 
       pusher.connection.bind('state_change', (states: { current: string }) => {
-        console.log(`🔌 [Pusher] Connection status changed to: ${states.current}`);
+        console.log(`🔌 [Pusher] ${states.current}`);
       });
 
       return pusher;
     } catch (error) {
-      console.warn('⚠️ Pusher failed to initialize. Running in simulated real-time mode.', error);
+      console.warn('⚠️ Pusher failed to initialize.', error);
       return null;
     }
   }

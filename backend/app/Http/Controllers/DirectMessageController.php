@@ -10,26 +10,25 @@ use App\Models\User;
 use Illuminate\Http\Request;
 
 class DirectMessageController extends Controller {
+
     public function index(Request $request) {
         $user = $request->user();
-
         $messages = DirectMessage::where('sender_id', $user->id)
             ->orWhere('recipient_id', $user->id)
             ->orderBy('created_at')
             ->limit(500)
             ->get();
-
         return response()->json($messages->map(fn (DirectMessage $message) => $this->formatMessage($message, $user->id))->values());
     }
 
     public function store(Request $request) {
         $fields = $request->validate([
-            'recipient_id' => 'required|integer|exists:users,id',
-            'text'         => 'nullable|string',
-            'images'       => 'nullable|array',
-            'audio_url'    => 'nullable|string',
+            'recipient_id'   => 'required|integer|exists:users,id',
+            'text'           => 'nullable|string',
+            'images'         => 'nullable|array',
+            'audio_url'      => 'nullable|string',
             'audio_duration' => 'nullable|string',
-            'call_type'    => 'nullable|string|in:audio,video',
+            'call_type'      => 'nullable|string|in:audio,video',
         ]);
 
         $sender = $request->user();
@@ -53,12 +52,10 @@ class DirectMessageController extends Controller {
 
     public function markRead(Request $request, int $senderId) {
         $user = $request->user();
-
         DirectMessage::where('sender_id', $senderId)
             ->where('recipient_id', $user->id)
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
-
         return response()->json(['success' => true]);
     }
 
@@ -66,6 +63,7 @@ class DirectMessageController extends Controller {
         $fields = $request->validate([
             'recipient_id' => 'required|integer|exists:users,id',
             'is_typing'    => 'required|boolean',
+            'live_text'    => 'nullable|string|max:500',  // texte en direct
         ]);
 
         $sender = $request->user();
@@ -74,7 +72,8 @@ class DirectMessageController extends Controller {
             $sender->id,
             $sender->name,
             (int) $fields['recipient_id'],
-            (bool) $fields['is_typing']
+            (bool) $fields['is_typing'],
+            $fields['live_text'] ?? null   // passer le texte live
         ));
 
         return response()->json(['success' => true]);
@@ -82,22 +81,20 @@ class DirectMessageController extends Controller {
 
     public function unreadCounts(Request $request) {
         $user = $request->user();
-
         $counts = DirectMessage::where('recipient_id', $user->id)
             ->whereNull('read_at')
             ->selectRaw('sender_id, COUNT(*) as count')
             ->groupBy('sender_id')
             ->get()
             ->mapWithKeys(fn ($row) => [(string) $row->sender_id => $row->count]);
-
         return response()->json($counts);
     }
 
     public function callSignal(Request $request) {
         $fields = $request->validate([
             'recipient_id' => 'required|integer|exists:users,id',
-            'signal' => 'required|array',
-            'type' => 'required|string|in:offer,answer,ice-candidate,hangup,ringing',
+            'signal'       => 'required|array',
+            'type'         => 'required|string|in:offer,answer,ice-candidate,hangup,ringing',
         ]);
 
         $sender = $request->user();

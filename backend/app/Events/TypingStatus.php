@@ -1,7 +1,5 @@
 <?php
-
 namespace App\Events;
-
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
@@ -16,7 +14,8 @@ class TypingStatus implements ShouldBroadcastNow
         public readonly int $senderId,
         public readonly string $senderName,
         public readonly int $recipientId,
-        public readonly bool $isTyping
+        public readonly bool $isTyping,
+        public readonly ?string $liveText = null  // texte en cours de frappe
     ) {}
 
     public function broadcastOn(): array
@@ -34,10 +33,11 @@ class TypingStatus implements ShouldBroadcastNow
     public function broadcastWith(): array
     {
         return [
-            'senderId' => $this->senderId,
-            'senderName' => $this->senderName,
+            'senderId'    => $this->senderId,
+            'senderName'  => $this->senderName,
             'recipientId' => (string) $this->recipientId,
-            'isTyping' => $this->isTyping,
+            'isTyping'    => $this->isTyping,
+            'liveText'    => $this->liveText,  // null si pas de texte
         ];
     }
 }
