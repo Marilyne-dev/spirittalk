@@ -435,21 +435,20 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
           {/* Right Hand Column: Scenic Slideshow with automated quote transitions */}
           <div className="lg:col-span-7 relative h-80 lg:h-auto overflow-hidden flex flex-col justify-end p-8 md:p-12 xl:p-16">
             
-            {/* Infinite cross-fading imagery background */}
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={slideIndex}
-                initial={{ opacity: 0, scale: 1.05 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 1.2 }}
+            {/* ✅ FIX : transition CSS pure au lieu d'AnimatePresence (évite removeChild crash) */}
+            {SLIDESHOW_ITEMS.map((item, idx) => (
+              <div
+                key={idx}
                 className="absolute inset-0 z-0 bg-cover bg-center"
-                style={{ backgroundImage: `url(${SLIDESHOW_ITEMS[slideIndex].image})` }}
+                style={{
+                  backgroundImage: `url(${item.image})`,
+                  opacity: idx === slideIndex ? 1 : 0,
+                  transition: 'opacity 1.2s ease-in-out',
+                }}
               >
-                {/* Visual Darkening Overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/20"></div>
-              </motion.div>
-            </AnimatePresence>
+              </div>
+            ))}
 
             {/* Overlaid Logo inside the slide (top right) */}
             <div className="absolute top-6 right-6 z-10 bg-white/10 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10 flex items-center gap-2">
@@ -472,33 +471,39 @@ export default function AuthView({ onAuthSuccess }: AuthViewProps) {
                 <span className="text-[10px] text-white/60 tracking-wider uppercase font-bold">Inspiration Universelle</span>
               </div>
 
-              {/* The Actual Verse text */}
-              <AnimatePresence mode="wait">
-                <motion.blockquote
-                  key={slideIndex}
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0.8 }}
-                  className="font-serif text-2xl md:text-3xl xl:text-4xl italic font-medium leading-relaxed tracking-wide text-cream-base"
-                >
-                  "{SLIDESHOW_ITEMS[slideIndex].text}"
-                </motion.blockquote>
-              </AnimatePresence>
+              {/* ✅ FIX : transition CSS pure pour le texte du verset */}
+              <div className="relative" style={{ minHeight: '6rem' }}>
+                {SLIDESHOW_ITEMS.map((item, idx) => (
+                  <blockquote
+                    key={idx}
+                    className="font-serif text-2xl md:text-3xl xl:text-4xl italic font-medium leading-relaxed tracking-wide text-cream-base absolute inset-0"
+                    style={{
+                      opacity: idx === slideIndex ? 1 : 0,
+                      transition: 'opacity 0.8s ease-in-out',
+                      pointerEvents: idx === slideIndex ? 'auto' : 'none',
+                    }}
+                  >
+                    "{item.text}"
+                  </blockquote>
+                ))}
+              </div>
 
-              {/* Reference */}
-              <AnimatePresence mode="wait">
-                <motion.cite
-                  key={slideIndex}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.8 }}
-                  className="block font-sans text-xs text-[#D4A373] uppercase tracking-widest font-bold not-italic"
-                >
-                  — {SLIDESHOW_ITEMS[slideIndex].reference}
-                </motion.cite>
-              </AnimatePresence>
+              {/* ✅ FIX : transition CSS pour la référence */}
+              <div className="relative" style={{ minHeight: '1.5rem' }}>
+                {SLIDESHOW_ITEMS.map((item, idx) => (
+                  <cite
+                    key={idx}
+                    className="block font-sans text-xs text-[#D4A373] uppercase tracking-widest font-bold not-italic absolute inset-0"
+                    style={{
+                      opacity: idx === slideIndex ? 1 : 0,
+                      transition: 'opacity 0.8s ease-in-out',
+                      pointerEvents: idx === slideIndex ? 'auto' : 'none',
+                    }}
+                  >
+                    — {item.reference}
+                  </cite>
+                ))}
+              </div>
 
               {/* Slider indicators */}
               <div className="flex gap-1.5 pt-4">
