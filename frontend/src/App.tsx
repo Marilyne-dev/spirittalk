@@ -359,7 +359,7 @@ export default function App() {
     return () => {
       if (pusher) pusher.disconnect();
     };
-  }, [user, friends]);
+  }, [user]);
 
   // Synchroniser les actualités/posts avec la vraie base de données de l'API
   useEffect(() => {
