@@ -123,7 +123,10 @@ export default function App() {
 
   const [currentTab, setCurrentTab] = useState<'home' | 'community' | 'inbox' | 'chat' | 'search' | 'profile'>('home');
   const [darkMode, setDarkMode] = useState<boolean>(false);
+
+  // ── APPELS : états partagés App ──────────────────────────────────────────
   const [activeCall, setActiveCall] = useState<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
+  // FIX : incomingCall est l'interface qui s'affiche chez le DESTINATAIRE
   const [incomingCall, setIncomingCall] = useState<{ peerId: string; mode: 'audio' | 'video'; signal: any } | null>(null);
 
   const peerConnectionRef = useRef<any>(null);
@@ -216,7 +219,7 @@ export default function App() {
     }).catch(() => {});
   }, [user]);
 
-  // ── handleEndCall déclaré tôt pour pouvoir être référencé dans les useEffect ──
+  // ── handleEndCall déclaré tôt ─────────────────────────────────────────────
   const handleEndCall = useCallback(() => {
     peerConnectionRef.current?.close();
     peerConnectionRef.current = null;
@@ -225,11 +228,10 @@ export default function App() {
     currentCallRef.current = null;
     pendingCallRef.current = null;
     setActiveCall(null);
-    // ── CHANGEMENT 4a : notifier InboxView que l'appel est terminé ──
     window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'call_ended' } }));
   }, []);
 
-  // ── CHANGEMENT 4b : écouter le raccrochage émis par InboxView ──
+  // Écouter le raccrochage émis par InboxView
   useEffect(() => {
     const handler = (e: any) => {
       if (e.detail?.type === 'hang_up') handleEndCall();
@@ -238,7 +240,7 @@ export default function App() {
     return () => window.removeEventListener('spirittalk_call_event', handler);
   }, [handleEndCall]);
 
-  // Accepter l'appel entrant
+  // ── Accepter l'appel entrant ──────────────────────────────────────────────
   const handleAcceptCall = useCallback(async () => {
     if (!incomingCall) return;
     const { peerId, signal } = incomingCall;
@@ -260,17 +262,18 @@ export default function App() {
           void remoteAudioRef.current.play().catch(() => undefined);
         }
       };
-      await pc.setRemoteDescription(signal);
+      // FIX : s'assurer que signal est bien un RTCSessionDescriptionInit
+      const sessionDesc = signal instanceof RTCSessionDescription ? signal : new RTCSessionDescription(signal);
+      await pc.setRemoteDescription(sessionDesc);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       await apiService.sendCallSignal(peerId, answer, 'answer');
       currentCallRef.current = { peerId, mode: 'audio' };
       setActiveCall({ peerId, mode: 'audio' });
-      // ── CHANGEMENT 3 : notifier InboxView que l'appel est décroché ──
       window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'call_accepted' } }));
     } catch (error) {
       console.warn('Could not answer call', error);
-      alert('Impossible d\'accéder au microphone.');
+      alert("Impossible d'accéder au microphone.");
     }
   }, [incomingCall]);
 
@@ -278,21 +281,23 @@ export default function App() {
     setIncomingCall(null);
   }, []);
 
-  // Pusher : temps réel
+  // ── Pusher : temps réel ───────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
 
     const pusher = pusherService.initialize(
-      // ── CHANGEMENT 1 : recipientId = myId (vrai ID) au lieu de 'me' ──
+      // FIX MESSAGES : on s'assure que recipientId = myId (vrai ID) et que
+      // l'état est mis à jour avec un nouveau tableau (référence différente)
+      // pour forcer le re-render d'InboxView
       (newMsg) => {
         const myId = String(user.id);
         const rawSenderId = String(newMsg.senderId);
-        if (rawSenderId === myId) return;
+        if (rawSenderId === myId) return; // ignorer ses propres messages
 
         const mappedMsg: DirectMessage = {
           id: newMsg.id ? String(newMsg.id) : `dm_pusher_${rawSenderId}_${Date.now()}`,
           senderId: rawSenderId,
-          recipientId: myId,   // ← FIX : vrai ID, pas 'me'
+          recipientId: myId,
           text: newMsg.text,
           images: newMsg.images,
           audioUrl: newMsg.audioUrl,
@@ -302,7 +307,9 @@ export default function App() {
         };
 
         setDirectMessages(prev => {
+          // Éviter les doublons
           if (prev.some(m => m.id === mappedMsg.id)) return prev;
+          // FIX : créer un nouveau tableau pour forcer le re-render
           return [...prev, mappedMsg];
         });
 
@@ -321,7 +328,6 @@ export default function App() {
         }
       },
 
-      // ── CHANGEMENT 2 : toujours appeler __inboxSetLiveTyping avec isTyping ──
       (friendId, isTyping, liveText?: string) => {
         setFriends(prev => prev.map(f => f.id === String(friendId) ? { ...f, isTyping } : f));
         if ((window as any).__inboxSetLiveTyping) {
@@ -329,11 +335,18 @@ export default function App() {
         }
       },
 
+      // FIX APPELS : traitement robuste des signaux WebRTC
       async (callPayload) => {
         if (!user) return;
+        const myId = String(user.id);
         const peerId = String(callPayload.senderId);
 
-        if (callPayload.type === 'offer' && peerId !== String(user.id)) {
+        // Ignorer ses propres signaux
+        if (peerId === myId) return;
+
+        // ── OFFRE D'APPEL : montrer l'écran d'appel entrant ──
+        if (callPayload.type === 'offer') {
+          // FIX : stocker le signal brut, on le convertira en RTCSessionDescription lors du décroché
           setIncomingCall({
             peerId,
             mode: callPayload.signal?.type === 'video' ? 'video' : 'audio',
@@ -342,14 +355,29 @@ export default function App() {
           return;
         }
 
+        // ── RÉPONSE : côté appelant, finaliser la connexion ──
         if (callPayload.type === 'answer' && peerConnectionRef.current) {
-          await peerConnectionRef.current.setRemoteDescription(callPayload.signal);
-          // ── Quand la réponse arrive, l'appel est actif côté appelant ──
-          window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'call_accepted' } }));
+          try {
+            const sessionDesc = callPayload.signal instanceof RTCSessionDescription
+              ? callPayload.signal
+              : new RTCSessionDescription(callPayload.signal);
+            await peerConnectionRef.current.setRemoteDescription(sessionDesc);
+            // Notifier InboxView que l'appel est actif
+            window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'call_accepted' } }));
+          } catch (err) {
+            console.warn('Failed to set remote description from answer', err);
+          }
         }
 
+        // ── ICE CANDIDATE ──
         if (callPayload.type === 'ice-candidate' && peerConnectionRef.current) {
-          await peerConnectionRef.current.addIceCandidate(callPayload.signal);
+          try {
+            await peerConnectionRef.current.addIceCandidate(
+              new RTCIceCandidate(callPayload.signal)
+            );
+          } catch (err) {
+            console.warn('Failed to add ICE candidate', err);
+          }
         }
       }
     );
@@ -357,14 +385,21 @@ export default function App() {
     return () => { if (pusher) pusher.disconnect(); };
   }, [user]);
 
-  // Charger les messages depuis le backend
+  // Charger les messages depuis le backend au démarrage
   useEffect(() => {
     if (!user) return;
     const loadMessages = async () => {
       try {
         const msgs = await apiService.getDirectMessages();
         if (msgs && msgs.length > 0) {
-          setDirectMessages(msgs);
+          // FIX : normaliser les IDs pour que le filtre dans InboxView fonctionne
+          const myId = String(user.id);
+          const normalized = msgs.map((m: any) => ({
+            ...m,
+            senderId: String(m.senderId || m.sender_id),
+            recipientId: String(m.recipientId || m.recipient_id) === myId ? myId : String(m.recipientId || m.recipient_id),
+          }));
+          setDirectMessages(normalized);
         }
       } catch {}
     };
@@ -685,10 +720,11 @@ export default function App() {
       setActiveCall({ peerId, mode });
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      await apiService.sendCallSignal(peerId, offer, 'offer');
+      // FIX : envoyer l'offre avec type explicite pour que Pusher puisse router
+      await apiService.sendCallSignal(peerId, { ...offer, type: offer.type }, 'offer');
     } catch (error) {
       console.warn('WebRTC setup failed', error);
-      window.alert('Votre navigateur bloque l\'accès au microphone.');
+      window.alert("Votre navigateur bloque l'accès au microphone.");
     }
   }, [user]);
 
@@ -723,10 +759,13 @@ export default function App() {
   };
 
   const handleSendDirectMessage = async (recipientId: string, text?: string, images?: string[], audioUrl?: string, audioDuration?: string) => {
+    const myId = String(user?.id || 'me');
     const newMsgId = `dm_msg_${Date.now()}`;
     const timestampStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const newMsg: DirectMessage = {
-      id: newMsgId, senderId: 'me', recipientId,
+      id: newMsgId,
+      senderId: myId,       // FIX : utiliser le vrai ID pour que le filtre fonctionne
+      recipientId,
       text, timestamp: timestampStr, images, audioUrl, audioDuration, readAt: null
     };
     setDirectMessages(prev => [...prev, newMsg]);
@@ -745,9 +784,9 @@ export default function App() {
     setTimeout(() => setFriends(prev => prev.map(f => f.id === recipientId ? { ...f, isTyping: false } : f)), 2000);
   };
 
-  // Nom et avatar de l'appelant pour l'écran de sonnerie
+  // Infos appelant pour l'écran d'appel entrant
   const callerName = incomingCall
-    ? (friends.find(f => f.id === incomingCall.peerId)?.name || 'Quelqu\'un vous appelle')
+    ? (friends.find(f => f.id === incomingCall.peerId)?.name || 'Appel entrant')
     : '';
   const callerAvatar = incomingCall
     ? (friends.find(f => f.id === incomingCall.peerId)?.avatar || '')
@@ -766,19 +805,31 @@ export default function App() {
         <div className="min-h-screen bg-cream-base dark:bg-charcoal-dark text-slate-800 dark:text-cream-base flex flex-col md:flex-row transition-colors duration-300">
           <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
 
-          {/* Écran de sonnerie appel entrant */}
+          {/* ══════════════════════════════════════════════════════════════════
+              ÉCRAN D'APPEL ENTRANT (affiché partout dans l'app)
+              FIX : cet overlay est dans App.tsx donc visible peu importe
+              l'onglet actif, et incomingCall est mis à jour par Pusher
+          ══════════════════════════════════════════════════════════════════ */}
           {incomingCall && (
             <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/70 backdrop-blur-sm">
               <div className="bg-white dark:bg-charcoal-dark rounded-3xl p-8 text-center shadow-2xl space-y-6 max-w-xs w-full mx-4 border border-emerald-medium/20 animate-fade-in">
-                <div className="relative mx-auto w-20 h-20">
+                {/* Avatar + animation de sonnerie */}
+                <div className="relative mx-auto w-24 h-24">
                   {callerAvatar ? (
-                    <img src={callerAvatar} alt={callerName} className="w-20 h-20 rounded-full object-cover border-4 border-emerald-medium/30" />
+                    <img
+                      src={callerAvatar}
+                      alt={callerName}
+                      className="w-24 h-24 rounded-full object-cover border-4 border-emerald-medium/40"
+                    />
                   ) : (
-                    <div className="w-20 h-20 rounded-full bg-emerald-medium/10 flex items-center justify-center">
+                    <div className="w-24 h-24 rounded-full bg-emerald-medium/10 flex items-center justify-center">
                       <Phone className="w-10 h-10 text-emerald-medium" />
                     </div>
                   )}
+                  {/* Anneaux de sonnerie animés */}
                   <span className="absolute inset-0 rounded-full border-2 border-emerald-medium/40 animate-ping" />
+                  <span className="absolute inset-[-8px] rounded-full border-2 border-emerald-medium/20 animate-ping [animation-delay:0.4s]" />
+                  <span className="absolute inset-[-18px] rounded-full border border-emerald-medium/10 animate-ping [animation-delay:0.8s]" />
                 </div>
 
                 <div className="space-y-1">
@@ -788,13 +839,16 @@ export default function App() {
                   <p className="font-serif text-2xl font-bold text-emerald-deep dark:text-cream-base">
                     {callerName}
                   </p>
+                  <p className="text-xs text-slate-400">vous appelle...</p>
                 </div>
 
-                <div className="flex gap-6 justify-center pt-2">
+                {/* Boutons Refuser / Décrocher */}
+                <div className="flex gap-8 justify-center pt-2">
                   <div className="flex flex-col items-center gap-2">
                     <button
                       onClick={handleDeclineCall}
                       className="p-5 rounded-full bg-red-500 hover:bg-red-600 text-white active:scale-95 transition-all shadow-lg"
+                      aria-label="Refuser l'appel"
                     >
                       <PhoneOff className="w-7 h-7" />
                     </button>
@@ -803,7 +857,8 @@ export default function App() {
                   <div className="flex flex-col items-center gap-2">
                     <button
                       onClick={handleAcceptCall}
-                      className="p-5 rounded-full bg-emerald-medium hover:bg-emerald-deep text-white active:scale-95 transition-all shadow-lg"
+                      className="p-5 rounded-full bg-emerald-medium hover:bg-emerald-deep text-white active:scale-95 transition-all shadow-lg animate-pulse"
+                      aria-label="Décrocher l'appel"
                     >
                       <Phone className="w-7 h-7" />
                     </button>

@@ -18,7 +18,7 @@ interface InboxViewProps {
   onStartCall: (recipientId: string, mode: 'audio' | 'video') => void;
 }
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://marilyne.alwaysdata.net/spirittalk';
+const API_BASE = ((import.meta as any).env?.VITE_API_URL || 'https://marilyne.alwaysdata.net/spirittalk').replace(/\/$/, '');
 
 export default function InboxView({
   user,
@@ -59,12 +59,15 @@ export default function InboxView({
 
   const selectedFriend = friends.find(f => f.id === selectedFriendId);
 
-  // ── FIX : scroll à chaque nouveau message ────────────────────────────────
+  // ── FIX : scroll + force re-render à chaque nouveau message ─────────────
   const prevMsgCount = useRef(0);
   useEffect(() => {
     if (messages.length !== prevMsgCount.current) {
       prevMsgCount.current = messages.length;
-      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 60);
+      // Forcer le scroll même si on était déjà en bas
+      requestAnimationFrame(() => {
+        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 60);
+      });
     }
   }, [messages]);
 
@@ -173,7 +176,7 @@ export default function InboxView({
     setInputText(val);
     if (!selectedFriendId) return;
     try {
-      await fetch(`${API_BASE}/api/direct-messages/typing`, {
+      await fetch(`${API_BASE}/direct-messages/typing`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -228,7 +231,7 @@ export default function InboxView({
         try {
           const fd = new FormData();
           fd.append('audio', blob, `voice_${Date.now()}.webm`);
-          const res = await fetch(`${API_BASE}/api/upload-audio`, {
+          const res = await fetch(`${API_BASE}/upload-audio`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${localStorage.getItem('spirittalk_token') || ''}` },
             body: fd
