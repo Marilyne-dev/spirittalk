@@ -18,7 +18,12 @@ class DirectMessageController extends Controller {
             ->orderBy('created_at')
             ->limit(500)
             ->get();
-        return response()->json($messages->map(fn (DirectMessage $message) => $this->formatMessage($message, $user->id))->values());
+
+        // ✅ FIX : on passe null pour ne PAS remplacer les IDs par 'me'
+        // Le frontend normalise lui-même avec son propre myId
+        return response()->json(
+            $messages->map(fn (DirectMessage $m) => $this->formatMessage($m))->values()
+        );
     }
 
     public function store(Request $request) {
@@ -43,7 +48,8 @@ class DirectMessageController extends Controller {
             'call_type'      => $fields['call_type'] ?? null,
         ]);
 
-        $formatted = $this->formatMessage($message, $sender->id);
+        // ✅ FIX : formatMessage sans currentUserId = vrais IDs numériques
+        $formatted = $this->formatMessage($message);
 
         broadcast(new NewDirectMessage($formatted, (int) $sender->id, (int) $fields['recipient_id']));
 
@@ -59,26 +65,6 @@ class DirectMessageController extends Controller {
         return response()->json(['success' => true]);
     }
 
-    public function typing(Request $request) {
-        $fields = $request->validate([
-            'recipient_id' => 'required|integer|exists:users,id',
-            'is_typing'    => 'required|boolean',
-            'live_text'    => 'nullable|string|max:500',  // texte en direct
-        ]);
-
-        $sender = $request->user();
-
-        broadcast(new TypingStatus(
-            $sender->id,
-            $sender->name,
-            (int) $fields['recipient_id'],
-            (bool) $fields['is_typing'],
-            $fields['live_text'] ?? null   // passer le texte live
-        ));
-
-        return response()->json(['success' => true]);
-    }
-
     public function unreadCounts(Request $request) {
         $user = $request->user();
         $counts = DirectMessage::where('recipient_id', $user->id)
@@ -88,6 +74,26 @@ class DirectMessageController extends Controller {
             ->get()
             ->mapWithKeys(fn ($row) => [(string) $row->sender_id => $row->count]);
         return response()->json($counts);
+    }
+
+    public function typing(Request $request) {
+        $fields = $request->validate([
+            'recipient_id' => 'required|integer|exists:users,id',
+            'is_typing'    => 'required|boolean',
+            'live_text'    => 'nullable|string|max:500',
+        ]);
+
+        $sender = $request->user();
+
+        broadcast(new TypingStatus(
+            $sender->id,
+            $sender->name,
+            (int) $fields['recipient_id'],
+            (bool) $fields['is_typing'],
+            $fields['live_text'] ?? null
+        ));
+
+        return response()->json(['success' => true]);
     }
 
     public function callSignal(Request $request) {
@@ -109,11 +115,12 @@ class DirectMessageController extends Controller {
         return response()->json(['success' => true]);
     }
 
-    private function formatMessage(DirectMessage $message, int $currentUserId): array {
+    // ✅ FIX : plus de currentUserId — toujours de vrais IDs numériques
+    private function formatMessage(DirectMessage $message): array {
         return [
             'id'            => (string) $message->id,
-            'senderId'      => $message->sender_id === $currentUserId ? 'me' : (string) $message->sender_id,
-            'recipientId'   => $message->recipient_id === $currentUserId ? 'me' : (string) $message->recipient_id,
+            'senderId'      => (string) $message->sender_id,
+            'recipientId'   => (string) $message->recipient_id,
             'text'          => $message->text,
             'images'        => $message->images,
             'audioUrl'      => $message->audio_url,

@@ -77,22 +77,24 @@ export const pusherService = {
       // 2. Canal messagerie
       const chatChannel = pusher.subscribe('spirittalk-chat');
 
-      chatChannel.bind('new-message', (data: any) => {
-        console.log('💬 [Pusher] New message:', data);
-        // Le backend broadcast envoie { message: { senderId, recipientId, ... } }
-        // On supporte les deux formats
-        const msg = data.message || data;
-        onNewMessage({
-          id: msg.id || `dm_pusher_${Date.now()}`,
-          senderId: String(msg.senderId),
-          recipientId: String(msg.recipientId),
-          text: msg.text,
-          images: msg.images,
-          audioUrl: msg.audioUrl,
-          audioDuration: msg.audioDuration,
-          timestamp: msg.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        });
-      });
+     chatChannel.bind('new-message', (data: any) => {
+  console.log('💬 [Pusher] New message raw:', data);
+
+  // ✅ FIX : le broadcast envoie maintenant tout à plat
+  // On garde la compatibilité avec l'ancien format { message: {...} }
+  const msg = (data.senderId || data.recipientId) ? data : (data.message || data);
+
+  onNewMessage({
+    id: msg.id ? String(msg.id) : `dm_pusher_${Date.now()}`,
+    senderId: String(msg.senderId),
+    recipientId: String(msg.recipientId),
+    text: msg.text,
+    images: msg.images,
+    audioUrl: msg.audioUrl || msg.audio_url,
+    audioDuration: msg.audioDuration || msg.audio_duration,
+    timestamp: msg.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  });
+});
 
       chatChannel.bind('typing-status', (data: any) => {
         console.log('✍️ [Pusher] Typing:', data);

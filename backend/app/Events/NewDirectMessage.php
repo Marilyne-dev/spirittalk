@@ -32,10 +32,17 @@ class NewDirectMessage implements ShouldBroadcastNow
 
     public function broadcastWith(): array
     {
+        // ✅ FIX : tout à plat, pas de sous-objet "message"
+        // pusherService lit data.message || data — on met tout à la racine
         return [
-            'message' => $this->message,
-            'senderId' => (string) $this->senderId,
-            'recipientId' => (string) $this->recipientId,
+            'id'            => $this->message['id'] ?? null,
+            'senderId'      => (string) $this->senderId,
+            'recipientId'   => (string) $this->recipientId,
+            'text'          => $this->message['text'] ?? null,
+            'images'        => $this->message['images'] ?? null,
+            'audioUrl'      => $this->message['audio_url'] ?? null,
+            'audioDuration' => $this->message['audio_duration'] ?? null,
+            'timestamp'     => $this->message['timestamp'] ?? now()->format('H:i'),
         ];
     }
 }

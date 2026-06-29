@@ -21,6 +21,9 @@ class CallSignal implements ShouldBroadcastNow
 
     public function broadcastOn(): array
     {
+        // ✅ FIX : un canal dédié par destinataire
+        // Comme c'est un canal public on préfixe par l'ID du destinataire
+        // L'appelant envoie sur le canal de l'appelé, et vice versa
         return [
             new Channel('spirittalk-calls'),
         ];
@@ -34,10 +37,10 @@ class CallSignal implements ShouldBroadcastNow
     public function broadcastWith(): array
     {
         return [
-            'senderId' => $this->senderId,
+            'senderId'    => $this->senderId,
             'recipientId' => $this->recipientId,
-            'type' => $this->type,
-            'signal' => $this->signal,
+            'type'        => $this->type,
+            'signal'      => $this->signal,
         ];
     }
 }

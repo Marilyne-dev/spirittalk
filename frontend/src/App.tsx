@@ -267,10 +267,11 @@ export default function App() {
       const sessionDesc = signal instanceof RTCSessionDescription ? signal : new RTCSessionDescription(signal);
       await pc.setRemoteDescription(sessionDesc);
       const answer = await pc.createAnswer();
+      const callMode = incomingCall.mode;
       await pc.setLocalDescription(answer);
       await apiService.sendCallSignal(peerId, answer, 'answer');
-      currentCallRef.current = { peerId, mode: 'audio' };
-      setActiveCall({ peerId, mode: 'audio' });
+      currentCallRef.current = { peerId, mode: callMode };
+      setActiveCall({ peerId, mode: callMode });
       window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'call_accepted' } }));
     } catch (error) {
       console.warn('Could not answer call', error);
@@ -393,20 +394,21 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     const loadMessages = async () => {
-      try {
-        const msgs = await apiService.getDirectMessages();
-        if (msgs && msgs.length > 0) {
-          // FIX : normaliser les IDs pour que le filtre dans InboxView fonctionne
-          const myId = String(user.id);
-          const normalized = msgs.map((m: any) => ({
-            ...m,
-            senderId: String(m.senderId || m.sender_id),
-            recipientId: String(m.recipientId || m.recipient_id) === myId ? myId : String(m.recipientId || m.recipient_id),
-          }));
-          setDirectMessages(normalized);
-        }
-      } catch {}
-    };
+        try {
+          const msgs = await apiService.getDirectMessages();
+          if (msgs && msgs.length > 0) {
+            const myId = String(user.id);
+            const normalized = msgs.map((m: any) => ({
+              ...m,
+              // ✅ FIX : les IDs sont maintenant de vrais strings numériques
+              // plus jamais 'me' venant du backend
+              senderId: String(m.senderId || m.sender_id),
+              recipientId: String(m.recipientId || m.recipient_id),
+            }));
+            setDirectMessages(normalized);
+          }
+        } catch {}
+      };
     loadMessages();
   }, [user]);
 
@@ -734,6 +736,8 @@ export default function App() {
 
   const handleStartCall = useCallback(async (friendId: string, mode: 'audio' | 'video' = 'audio') => {
     pendingCallRef.current = { peerId: friendId, mode };
+    // ✅ FIX : délai de 500ms pour laisser Pusher s'abonner côté destinataire
+    await new Promise(resolve => setTimeout(resolve, 500));
     await setupWebRtc(friendId, mode);
   }, [setupWebRtc]);
 
