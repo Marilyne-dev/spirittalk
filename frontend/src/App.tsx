@@ -293,7 +293,13 @@ export default function App() {
       (newMsg) => {
         const myId = String(user.id);
         const rawSenderId = String(newMsg.senderId);
-        if (rawSenderId === myId) return; // ignorer ses propres messages
+        const rawRecipientId = String(newMsg.recipientId);
+
+        // ── FILTRE CRITIQUE : ignorer les messages qui ne me sont pas destinés ──
+        // Le canal est PUBLIC donc tout le monde reçoit tous les messages
+        // On n'accepte que : expéditeur = moi (mes propres envois sync) OU destinataire = moi
+        if (rawSenderId === myId) return;         // ignorer ses propres messages (déjà ajoutés localement)
+        if (rawRecipientId !== myId) return;      // ignorer les messages entre deux autres utilisateurs
 
         const mappedMsg: DirectMessage = {
           id: newMsg.id ? String(newMsg.id) : `dm_pusher_${rawSenderId}_${Date.now()}`,
@@ -308,9 +314,7 @@ export default function App() {
         };
 
         setDirectMessages(prev => {
-          // Éviter les doublons
           if (prev.some(m => m.id === mappedMsg.id)) return prev;
-          // FIX : créer un nouveau tableau pour forcer le re-render
           return [...prev, mappedMsg];
         });
 
@@ -336,18 +340,18 @@ export default function App() {
         }
       },
 
-      // FIX APPELS : traitement robuste des signaux WebRTC
       async (callPayload) => {
         if (!user) return;
         const myId = String(user.id);
         const peerId = String(callPayload.senderId);
+        const targetId = String(callPayload.recipientId);
 
-        // Ignorer ses propres signaux
-        if (peerId === myId) return;
+        // ── FILTRE CRITIQUE : canal public, ignorer les signaux pas destinés à moi ──
+        if (peerId === myId) return;      // ignorer mes propres signaux
+        if (targetId !== myId) return;    // ignorer les appels entre deux autres users
 
         // ── OFFRE D'APPEL : montrer l'écran d'appel entrant ──
         if (callPayload.type === 'offer') {
-          // FIX : stocker le signal brut, on le convertira en RTCSessionDescription lors du décroché
           setIncomingCall({
             peerId,
             mode: callPayload.signal?.type === 'video' ? 'video' : 'audio',
@@ -363,7 +367,6 @@ export default function App() {
               ? callPayload.signal
               : new RTCSessionDescription(callPayload.signal);
             await peerConnectionRef.current.setRemoteDescription(sessionDesc);
-            // Notifier InboxView que l'appel est actif
             window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'call_accepted' } }));
           } catch (err) {
             console.warn('Failed to set remote description from answer', err);
