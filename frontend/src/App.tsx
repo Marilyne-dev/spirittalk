@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect, useRef } from 'react';
+import React, { useCallback, useState, useEffect, useRef, startTransition } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Home, Sparkles, Search, User, Award, Moon, Sun, Bell, MessageSquare, Users, MessageCircle, Phone, PhoneOff } from 'lucide-react';
 import { ChatMessage, Bookmark, Note, InspirationCard, Religion, CommunityPost, Friend, DirectMessage, SpiritNotification } from './types';
@@ -314,15 +314,16 @@ export default function App() {
           readAt: null
         };
 
-        setDirectMessages(prev => {
-          if (prev.some(m => m.id === mappedMsg.id)) return prev;
-          return [...prev, mappedMsg];
+        startTransition(() => {
+          setDirectMessages(prev => {
+            if (prev.some(m => m.id === mappedMsg.id)) return prev;
+            return [...prev, mappedMsg];
+          });
+          setUnreadCounts(prev => ({
+            ...prev,
+            [rawSenderId]: (prev[rawSenderId] || 0) + 1
+          }));
         });
-
-        setUnreadCounts(prev => ({
-          ...prev,
-          [rawSenderId]: (prev[rawSenderId] || 0) + 1
-        }));
       },
 
       (newPost) => {
@@ -355,7 +356,7 @@ export default function App() {
         if (callPayload.type === 'offer') {
           setIncomingCall({
             peerId,
-            mode: callPayload.signal?.type === 'video' ? 'video' : 'audio',
+            mode: callPayload.signal?.callMode === 'video' ? 'video' : 'audio',
             signal: callPayload.signal
           });
           return;
@@ -727,7 +728,7 @@ export default function App() {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       // FIX : envoyer l'offre avec type explicite pour que Pusher puisse router
-      await apiService.sendCallSignal(peerId, { ...offer, type: offer.type }, 'offer');
+      await apiService.sendCallSignal(peerId, { ...offer, callMode: mode }, 'offer');
     } catch (error) {
       console.warn('WebRTC setup failed', error);
       window.alert("Votre navigateur bloque l'accès au microphone.");
