@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { X, BookOpen, Clock, Tag, Share2, Bookmark } from 'lucide-react';
 import { InspirationCard } from '../types';
 
@@ -22,15 +22,15 @@ export default function InspirationModal({ card, onClose, onBookmark }: Inspirat
   };
 
   return (
-    <AnimatePresence mode="wait">
-      <div id="inspiration-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          transition={{ duration: 0.3 }}
-          className="relative w-full max-w-2xl overflow-hidden rounded-2xl bg-cream-base dark:bg-charcoal-dark border border-emerald-medium/10 shadow-2xl flex flex-col max-h-[85vh]"
-        >
+    <div id="inspiration-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <motion.div
+        key="inspiration-modal-panel"
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        transition={{ duration: 0.3 }}
+        className="relative w-full max-w-2xl overflow-hidden rounded-2xl bg-cream-base dark:bg-charcoal-dark border border-emerald-medium/10 shadow-2xl flex flex-col max-h-[85vh]"
+      >
           {/* Hero Banner image with overlay */}
           <div className="relative h-56 w-full overflow-hidden shrink-0">
             <img
@@ -112,8 +112,7 @@ export default function InspirationModal({ card, onClose, onBookmark }: Inspirat
               Fermer la Réflexion
             </button>
           </div>
-        </motion.div>
-      </div>
-    </AnimatePresence>
+      </motion.div>
+    </div>
   );
 }

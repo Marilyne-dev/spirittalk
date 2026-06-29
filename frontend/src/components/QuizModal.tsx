@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { X, Award, HelpCircle, CheckCircle2, AlertCircle, ArrowRight, Sparkles } from 'lucide-react';
 import { QuizQuestion } from '../types';
 import { QUIZ_QUESTIONS } from '../data';
@@ -55,15 +55,15 @@ export default function QuizModal({ isOpen, onClose, onQuizComplete }: QuizModal
   };
 
   return (
-    <AnimatePresence mode="wait">
-      <div id="quiz-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          transition={{ duration: 0.3 }}
-          className="relative w-full max-w-xl overflow-hidden rounded-2xl bg-cream-base dark:bg-charcoal-dark border border-emerald-medium/10 shadow-2xl flex flex-col max-h-[90vh]"
-        >
+    <div id="quiz-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <motion.div
+        key="quiz-modal-panel"
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        transition={{ duration: 0.3 }}
+        className="relative w-full max-w-xl overflow-hidden rounded-2xl bg-cream-base dark:bg-charcoal-dark border border-emerald-medium/10 shadow-2xl flex flex-col max-h-[90vh]"
+      >
           {/* Header */}
           <div className="flex items-center justify-between p-5 border-b border-cream-darker dark:border-charcoal-light/30 bg-emerald-medium text-white">
             <div className="flex items-center gap-2">
@@ -235,6 +235,5 @@ export default function QuizModal({ isOpen, onClose, onQuizComplete }: QuizModal
           )}
         </motion.div>
       </div>
-    </AnimatePresence>
   );
 }

@@ -1,4 +1,5 @@
 import React, { useCallback, useState, useEffect, useRef } from 'react';
+import { AnimatePresence } from 'motion/react';
 import { Home, Sparkles, Search, User, Award, Moon, Sun, Bell, MessageSquare, Users, MessageCircle, Phone, PhoneOff } from 'lucide-react';
 import { ChatMessage, Bookmark, Note, InspirationCard, Religion, CommunityPost, Friend, DirectMessage, SpiritNotification } from './types';
 import HomeView from './components/HomeView';
@@ -794,14 +795,14 @@ export default function App() {
 
   return (
     <>
-      <div style={{ display: user ? 'none' : 'block' }}>
+      {!user && (
         <AuthView onAuthSuccess={(authenticatedUser) => {
           localStorage.setItem('spirittalk_user', JSON.stringify(authenticatedUser));
           setUser(authenticatedUser);
         }} />
-      </div>
+      )}
 
-      <div style={{ display: user ? 'block' : 'none' }}>
+      {user && <div>
         <div className="min-h-screen bg-cream-base dark:bg-charcoal-dark text-slate-800 dark:text-cream-base flex flex-col md:flex-row transition-colors duration-300">
           <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
 
@@ -991,10 +992,16 @@ export default function App() {
             ))}
           </nav>
 
-          <QuizModal isOpen={isQuizOpen} onClose={() => setIsQuizOpen(false)} onQuizComplete={(xpGained) => { handleAddXP(xpGained); if (!hasCheckedInToday) { setHasCheckedInToday(true); setStreak(prev => prev + 1); } }} />
-          <InspirationModal card={selectedInspiration} onClose={() => setSelectedInspiration(null)} onBookmark={handleAddBookmark} />
+          <AnimatePresence>
+            {isQuizOpen && (
+              <QuizModal isOpen={isQuizOpen} onClose={() => setIsQuizOpen(false)} onQuizComplete={(xpGained) => { handleAddXP(xpGained); if (!hasCheckedInToday) { setHasCheckedInToday(true); setStreak(prev => prev + 1); } }} />
+            )}
+            {selectedInspiration && (
+              <InspirationModal card={selectedInspiration} onClose={() => setSelectedInspiration(null)} onBookmark={handleAddBookmark} />
+            )}
+          </AnimatePresence>
         </div>
-      </div>
+      </div>}
     </>
   );
 }
