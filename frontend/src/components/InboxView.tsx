@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+// APRÈS
+import React, { useState, useRef, useEffect, startTransition } from 'react';
 import { 
   Mic, Square, Play, Image as ImageIcon, Send, Users, Sparkles, 
   Phone, Video, Volume2, Check, CheckCheck, ChevronLeft,
@@ -61,14 +62,15 @@ export default function InboxView({
   const myId = String(user?.id || '');
 
   // ── FIX : scroll automatique ─────────────────────────────────────────────
-  useEffect(() => {
-    const scrollToBottom = () => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    };
-    // Petit délai pour laisser le DOM se mettre à jour
-    const timeout = setTimeout(scrollToBottom, 100);
-    return () => clearTimeout(timeout);
-  }, [messages, liveTypingText, friendIsTyping]);
+ // APRÈS
+useEffect(() => {
+  const el = messagesEndRef.current;
+  if (!el) return;
+  const timeout = setTimeout(() => {
+    try { el.scrollIntoView({ behavior: 'smooth' }); } catch {}
+  }, 150);
+  return () => clearTimeout(timeout);
+}, [messages.length, liveTypingText, friendIsTyping]);
 
   // ── Marquer comme lu ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -91,19 +93,22 @@ export default function InboxView({
   }, [callIsActive]);
 
   // ── Écouter les événements d'App.tsx ──────────────────────────────────────
+ // APRÈS
   useEffect(() => {
     const handler = (e: any) => {
       const { type, stream } = e.detail || {};
-      if (type === 'call_accepted') {
-        setCallIsActive(true);
-        if (stream) setRemoteStream(stream);
-      }
-      if (type === 'call_ended') {
-        setOutgoingCall(null);
-        setCallIsActive(false);
-        setCallDuration(0);
-        setRemoteStream(null);
-      }
+      startTransition(() => {
+        if (type === 'call_accepted') {
+          setCallIsActive(true);
+          if (stream) setRemoteStream(stream);
+        }
+        if (type === 'call_ended') {
+          setOutgoingCall(null);
+          setCallIsActive(false);
+          setCallDuration(0);
+          setRemoteStream(null);
+        }
+      });
     };
     window.addEventListener('spirittalk_call_event', handler);
     return () => window.removeEventListener('spirittalk_call_event', handler);
