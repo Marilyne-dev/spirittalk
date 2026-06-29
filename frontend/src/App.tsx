@@ -1000,14 +1000,14 @@ export default function App() {
             ))}
           </nav>
 
-          <AnimatePresence>
+          <>
             {isQuizOpen && (
               <QuizModal isOpen={isQuizOpen} onClose={() => setIsQuizOpen(false)} onQuizComplete={(xpGained) => { handleAddXP(xpGained); if (!hasCheckedInToday) { setHasCheckedInToday(true); setStreak(prev => prev + 1); } }} />
             )}
             {selectedInspiration && (
               <InspirationModal card={selectedInspiration} onClose={() => setSelectedInspiration(null)} onBookmark={handleAddBookmark} />
             )}
-          </AnimatePresence>
+          </>
         </div>
       </div>}
     </>
