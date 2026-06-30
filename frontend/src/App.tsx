@@ -827,10 +827,18 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
     try {
       // APRÈS
       const constraints: MediaStreamConstraints = { audio: true };
-      if (mode === 'video') constraints.video = { width: 640, height: 480 };
-      const stream = await navigator.mediaDevices.getUserMedia(constraints).catch(async () => {
-        return await navigator.mediaDevices.getUserMedia({ audio: true });
-      });
+      if (mode === 'video') constraints.video = { width: { ideal: 640 }, height: { ideal: 480 } };
+
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (err: any) {
+        console.error('Échec caméra (appelant):', err.name, err.message);
+        if (mode === 'video') {
+          alert(`Caméra inaccessible (${err.name}). Vérifie qu'aucune autre app/onglet ne l'utilise.`);
+        }
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
       localStreamRef.current = stream;
       setLocalStream(stream);
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
