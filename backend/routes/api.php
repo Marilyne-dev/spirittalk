@@ -74,7 +74,7 @@ Route::post('/gemini/chat', function (\Illuminate\Http\Request $request) {
     if (!$userMessage) {
         return response()->json(['error' => 'userMessage requis'], 400);
     }
-    $apiKey = env('OPENROUTER_API_KEY');
+    $apiKey = env('GROQ_API_KEY');
     if (!$apiKey) {
         return response()->json(['text' => '[Sagesse Divine] La paix soit avec vous.'], 200);
     }
