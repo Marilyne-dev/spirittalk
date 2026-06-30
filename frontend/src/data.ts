@@ -423,5 +423,186 @@ export const INSPIRATIONS: InspirationCard[] = [
     category: "Méditation",
     imageUrl: "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&q=80&w=800",
     content: "La nature est souvent décrite comme le premier livre sacré, ouvert à tous. Les Psaumes chantent que 'les cieux racontent la gloire de Dieu', et le Coran invite sans cesse à méditer 'les signes' présents dans la création. Sortez aujourd'hui, même quelques minutes, et observez un élément naturel — un arbre, le ciel, une fleur — avec un regard neuf et reconnaissant."
-  }
+  },
+
+  {
+    id: 'insp_resilience',
+    title: "La Résilience de l'Âme",
+    description: "Se relever plus fort après chaque épreuve.",
+    duration: "10 Jours",
+    category: "Espoir",
+    imageUrl: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&q=80&w=800",
+    content: "La résilience n'est pas l'absence de blessure, mais la capacité à se relever malgré elle. Job dans la Bible, Ayoub dans le Coran — tous deux témoignent d'une foi qui résiste à la tempête sans jamais se briser. Chaque épreuve traverse nos vies comme un feu qui, loin de nous consumer, purifie ce qui est essentiel. Réfléchissez aujourd'hui à une difficulté passée que vous avez surmontée, et reconnaissez la force que vous en avez tirée."
+  },
+  {
+    id: 'insp_lumiere',
+    title: "Être une Lumière pour Autrui",
+    description: "Rayonner la bonté autour de soi dans les actes simples.",
+    duration: "8 Jours",
+    category: "Service",
+    imageUrl: "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?auto=format&fit=crop&q=80&w=800",
+    content: "Matthieu 5:16 invite chacun à 'laisser briller sa lumière devant les hommes'. Cette lumière n'est pas celle de la perfection, mais celle de la bienveillance quotidienne. Le Prophète Muhammad, que la paix soit sur lui, disait qu'un sourire à ton frère est une aumône. Ce parcours vous invite à poser chaque jour un geste lumineux — une parole d'encouragement, une aide inattendue — et d'observer comment votre propre lumière s'intensifie en éclairant celle des autres."
+  },
+  {
+    id: 'insp_detachement',
+    title: "Le Détachement Spirituel",
+    description: "Apprécier sans s'accrocher, aimer sans posséder.",
+    duration: "7 Jours",
+    category: "Sagesse",
+    imageUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=800",
+    content: "Le détachement spirituel n'est pas l'indifférence, mais une liberté intérieure qui apprécie sans s'accrocher. 'Ne vous amassez pas des trésors sur la terre', enseigne Matthieu, tandis que le Coran rappelle que 'la vie de ce monde n'est que jouissance trompeuse'. Ce parcours explore la légèreté qui vient lorsqu'on place ses espoirs dans ce qui ne peut être emporté — la foi, l'amour, la paix intérieure."
+  },
+  {
+    id: 'insp_nuit_obscure',
+    title: "Traverser la Nuit Obscure",
+    description: "Faire confiance même quand on ne voit plus rien.",
+    duration: "12 Jours",
+    category: "Foi",
+    imageUrl: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&q=80&w=800",
+    content: "Tous les grands mystiques ont traversé des périodes de sécheresse spirituelle — ce que Jean de la Croix appelait 'la nuit obscure de l'âme'. Dans le Coran, 'Votre Seigneur ne vous a pas abandonnés' (93:3) fut révélé précisément dans un moment de silence divin ressenti par le Prophète. Ces nuits d'obscurité ne sont pas des abandons mais des transitions vers une foi plus mature et plus enracinée. Traversez-la avec courage."
+  },
+  {
+    id: 'insp_corps_temple',
+    title: "Le Corps, Temple de l'Esprit",
+    description: "Prendre soin de soi comme d'un acte d'adoration.",
+    duration: "9 Jours",
+    category: "Gratitude",
+    imageUrl: "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=800",
+    content: "Votre corps n'est pas un obstacle à votre vie spirituelle — il en est le temple. 'Ne savez-vous pas que votre corps est le temple du Saint-Esprit ?' demande Paul. L'Islam encourage aussi à prendre soin de sa santé comme d'une responsabilité envers Dieu. Ce parcours vous invite à réconcilier corps et âme : bien dormir, bien manger, marcher en plein air — tous ces gestes peuvent devenir des prières lorsqu'ils sont posés avec gratitude et conscience."
+  },
+  {
+    id: 'insp_ecoute_divine',
+    title: "Apprendre à Écouter Dieu",
+    description: "Reconnaître la voix du divin dans le quotidien.",
+    duration: "11 Jours",
+    category: "Méditation",
+    imageUrl: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?auto=format&fit=crop&q=80&w=800",
+    content: "Dieu parle souvent en murmure plutôt qu'en tonnerre. Élie dans la Bible l'a entendu dans 'le son d'un léger souffle'. Dans la tradition islamique, le cœur du croyant est décrit comme le miroir qui reflète les inspirations divines. Ce parcours propose des exercices quotidiens d'écoute intérieure — la journalisation spirituelle, la prière contemplative, le silence choisi — pour affiner cette oreille du cœur que chacun possède."
+  },
+  {
+    id: 'insp_parole_qui_guerit',
+    title: "La Parole qui Guérit",
+    description: "Choisir ses mots comme on choisit un remède.",
+    duration: "7 Jours",
+    category: "Compassion",
+    imageUrl: "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&q=80&w=800",
+    content: "Les mots portent un pouvoir immense — celui de blesser ou de guérir, de décourager ou d'élever. Proverbes 12:18 dit : 'La langue des sages est une médecine'. Le Hadith rappelle que 'celui qui croit en Allah et au Jour dernier qu'il dise ce qui est bien, ou qu'il se taise'. Ce parcours vous invite à observer votre langage pendant sept jours : chaque soir, notez une parole bienveillante que vous avez prononcée et son effet sur votre entourage."
+  },
+  {
+    id: 'insp_solitude_feconde',
+    title: "La Solitude Féconde",
+    description: "Faire de la solitude un espace de croissance et non de vide.",
+    duration: "8 Jours",
+    category: "Méditation",
+    imageUrl: "https://images.unsplash.com/photo-1501854140801-50d01698950b?auto=format&fit=crop&q=80&w=800",
+    content: "Jésus se retirait souvent seul pour prier. Le Prophète Muhammad passait des heures de retraite spirituelle dans la grotte de Hirâ' avant la Révélation. La solitude choisie est différente de la solitude subie — elle est un atelier où l'âme se renouvelle, où les questions essentielles trouvent enfin l'espace pour être posées. Prévoyez un moment seul cette semaine, sans téléphone, sans distraction, juste vous et le divin."
+  },
+  {
+    id: 'insp_generosite',
+    title: "L'Âme Généreuse",
+    description: "Donner ce qu'on aime et découvrir l'abondance intérieure.",
+    duration: "10 Jours",
+    category: "Service",
+    imageUrl: "https://images.unsplash.com/photo-1469571486292-0ba58a3f068b?auto=format&fit=crop&q=80&w=800",
+    content: "La vraie générosité est celle qui donne ce qu'elle chérit. Le Coran dit : 'Vous n'atteindrez la piété parfaite que si vous dépensez de ce que vous aimez'. Luc 21 raconte la veuve qui offre ses deux dernières pièces — plus que tous les riches. Ce parcours explore la générosité non comme une obligation mais comme une libération : plus on donne, plus on découvre qu'on possède l'essentiel."
+  },
+  {
+    id: 'insp_memoire_eternelle',
+    title: "Vivre pour l'Éternité",
+    description: "Ancrer ses choix dans une perspective qui dépasse le temporaire.",
+    duration: "9 Jours",
+    category: "Foi",
+    imageUrl: "https://images.unsplash.com/photo-1518655048521-f130df041f66?auto=format&fit=crop&q=80&w=800",
+    content: "Nos actes quotidiens prennent un sens nouveau lorsqu'on les inscrit dans une perspective éternelle. 'Tout ce que vous faites, faites-le comme pour le Seigneur', écrit Paul. Le Coran rappelle que 'celui qui fait le poids d'un atome de bien le verra'. Ce parcours invite à revoir nos priorités quotidiennes à la lumière de cette perspective : est-ce que mes choix d'aujourd'hui construisent quelque chose de durable ?"
+  },
+  {
+    id: 'insp_reconciliation',
+    title: "L'Art de la Réconciliation",
+    description: "Reconstruire les ponts entre les cœurs blessés.",
+    duration: "8 Jours",
+    category: "Pardon",
+    imageUrl: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&q=80&w=800",
+    content: "La réconciliation est l'un des actes les plus courageux que l'être humain puisse poser. 'Heureux les artisans de paix', proclame Jésus. Le Coran encourage à 'rétablir les liens de parenté' et valorise celui qui prend l'initiative de réconcilier. Ce n'est pas minimiser la blessure que de tendre la main — c'est choisir l'avenir plutôt que le passé. Y a-t-il une relation dans votre vie qui mériterait un premier pas de réconciliation ?"
+  },
+  {
+    id: 'insp_courage',
+    title: "Le Courage de la Foi",
+    description: "Avancer même quand la peur est présente.",
+    duration: "7 Jours",
+    category: "Foi",
+    imageUrl: "https://images.unsplash.com/photo-1551632811-561732d1e306?auto=format&fit=crop&q=80&w=800",
+    content: "Le courage spirituel n'est pas l'absence de peur — c'est la décision d'avancer malgré elle. 'Sois fort et courageux ! Ne t'effraie pas', répète Josué. Et le Coran : 'Allah est avec ceux qui patient'. Chaque jour nous présente des occasions de courage discret — dire la vérité avec amour, défendre le faible, poursuivre notre vocation malgré le doute. Ce parcours vous accompagne dans sept décisions courageuses, une par jour."
+  },
+  {
+    id: 'insp_enfance_spirituelle',
+    title: "L'Enfance Spirituelle",
+    description: "Retrouver la confiance et l'émerveillement de l'enfant.",
+    duration: "6 Jours",
+    category: "Joie",
+    imageUrl: "https://images.unsplash.com/photo-1516627145497-ae6968895b74?auto=format&fit=crop&q=80&w=800",
+    content: "'Si vous ne devenez pas comme les petits enfants, vous n'entrerez pas dans le royaume des cieux', dit Jésus. Cette enfance spirituelle n'est pas naïveté — c'est cette capacité à s'émerveiller, à faire confiance, à demander sans honte. Le soufisme parle de revenir à un état de pureté originelle (fitra). Ce parcours vous invite à retrouver cette légèreté : jouez, émerveillez-vous, posez des questions sans craindre de paraître ignorant."
+  },
+  {
+    id: 'insp_temps_sacre',
+    title: "Sanctifier le Temps",
+    description: "Faire de chaque moment une occasion de présence divine.",
+    duration: "11 Jours",
+    category: "Prière",
+    imageUrl: "https://images.unsplash.com/photo-1508739773434-c26b3d09e071?auto=format&fit=crop&q=80&w=800",
+    content: "Le temps est le tissu dans lequel se tisse notre vie spirituelle. Le Sabbat juif, le dimanche chrétien, le Jumu'ah islamique — toutes les traditions ont compris que certains moments méritent d'être mis à part, sanctifiés. Mais au-delà des jours consacrés, chaque instant peut devenir sacré lorsqu'on y apporte une pleine présence. Ce parcours propose de créer des petits rituels quotidiens qui transforment les moments ordinaires en oraisons vivantes."
+  },
+  {
+    id: 'insp_traverser_deuil',
+    title: "Traverser le Deuil avec Foi",
+    description: "Accueillir la perte sans perdre la paix de l'âme.",
+    duration: "14 Jours",
+    category: "Espoir",
+    imageUrl: "https://images.unsplash.com/photo-1473531761844-5a14668fc8f8?auto=format&fit=crop&q=80&w=800",
+    content: "Le deuil est l'une des expériences humaines les plus universelles et les plus solitaires. 'Heureux ceux qui pleurent, car ils seront consolés', promet Jésus. Le Coran rappelle qu'à chaque épreuve, Dieu est 'proche des cœurs brisés'. Ce parcours de 14 jours n'a pas la prétention d'effacer la douleur — il propose un accompagnement spirituel doux pour traverser le deuil sans le nier, en lui permettant de devenir une transformation."
+  },
+  {
+    id: 'insp_communaute',
+    title: "La Force de la Communauté",
+    description: "Grandir ensemble plutôt que seul.",
+    duration: "8 Jours",
+    category: "Unité",
+    imageUrl: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&q=80&w=800",
+    content: "Aucune tradition spirituelle ne se vit vraiment seul. 'Là où deux ou trois sont réunis en mon nom', dit Jésus. L'Oumma islamique est fondée sur l'idée que les croyants forment un seul corps — si un membre souffre, tous souffrent. SpiritTalk est une expression moderne de cette vocation communautaire. Ce parcours explore comment être un membre actif et bienveillant d'une communauté spirituelle, en ligne ou en personne."
+  },
+  {
+    id: 'insp_abandon_confiant',
+    title: "L'Abandon Confiant",
+    description: "Remettre sa vie entre des mains plus grandes que les siennes.",
+    duration: "9 Jours",
+    category: "Confiance",
+    imageUrl: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&q=80&w=800",
+    content: "Le tawakkul islamique — l'abandon confiant à Allah après avoir fait de son mieux — rejoint l'abandon chrétien à la Providence divine. Ce n'est pas la passivité, mais la paix de celui qui a planté sa graine, arrosé sa terre, et confie la croissance à plus grand que lui. Ce parcours vous aide à identifier ce que vous pouvez contrôler et à libérer en paix ce qui ne dépend pas de vous."
+  },
+  {
+    id: 'insp_jeune_interieur',
+    title: "Le Jeûne de l'Âme",
+    description: "Se purifier intérieurement au-delà du seul jeûne alimentaire.",
+    duration: "7 Jours",
+    category: "Prière",
+    imageUrl: "https://images.unsplash.com/photo-1528360983277-13d401cdc186?auto=format&fit=crop&q=80&w=800",
+    content: "Le jeûne du Ramadan et le jeûne chrétien du Carême visent bien au-delà de la privation alimentaire — ils sont des invitations à un nettoyage intérieur profond. 'Ce genre-là ne sort que par la prière et le jeûne', dit Jésus. Le Prophète rappelait que celui qui ne cesse pas de mentir et d'agir mal, Allah n'a que faire qu'il se prive de nourriture. Ce parcours propose un jeûne de l'âme : jeûner de la plainte, de la comparaison, du jugement."
+  },
+  {
+    id: 'insp_voir_dieu_partout',
+    title: "Voir Dieu en Toutes Choses",
+    description: "Cultiver un regard contemplatif sur le monde ordinaire.",
+    duration: "10 Jours",
+    category: "Méditation",
+    imageUrl: "https://images.unsplash.com/photo-1435224654926-ecc9f7fa028c?auto=format&fit=crop&q=80&w=800",
+    content: "Ignace de Loyola enseignait à 'trouver Dieu en toutes choses'. Le Coran révèle que 'où que vous vous tourniez, là est la Face d'Allah'. Cette contemplation universelle transforme le regard : le lever du soleil devient une theophanie, le repas partagé devient eucharistie, l'étranger croisé devient une occasion de servir le visage du divin. Ce parcours entraîne ce regard contemplatif au quotidien."
+  },
+  {
+    id: 'insp_paix_avec_soi',
+    title: "La Paix avec Soi-Même",
+    description: "Apprendre à s'aimer avec la même tendresse qu'on donne aux autres.",
+    duration: "12 Jours",
+    category: "Paix",
+    imageUrl: "https://images.unsplash.com/photo-1502139214982-d0ad755818d8?auto=format&fit=crop&q=80&w=800",
+    content: "Nous sommes souvent nos propres juges les plus sévères. Pourtant, 'tu aimeras ton prochain comme toi-même' suppose que l'amour de soi est un fondement, non un péché. L'Islam enseigne que maltraiter son propre corps et son propre esprit est une forme d'ingratitude envers Dieu qui nous a créés. Ce parcours de 12 jours est une invitation à la douceur envers soi — à se parler comme on parlerait à un ami cher traversant une épreuve."
+  },
 ];
