@@ -129,6 +129,9 @@ export default function App() {
   // ── APPELS : états partagés App ──────────────────────────────────────────
   const [activeCall, setActiveCall] = useState<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
   const [callConnected, setCallConnected] = useState(false);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const callDurationRef = useRef(0);
 
   // FIX : incomingCall est l'interface qui s'affiche chez le DESTINATAIRE
   const [incomingCall, setIncomingCall] = useState<{ peerId: string; mode: 'audio' | 'video'; signal: any } | null>(null);
@@ -230,8 +233,47 @@ export default function App() {
     }).catch(() => {});
   }, [user]);
 
+  // ── Tracker la durée d'appel ───────────────────────────────────────────────
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+    if (callConnected) {
+      callDurationRef.current = 0;
+      interval = setInterval(() => { callDurationRef.current += 1; }, 1000);
+    }
+    return () => { if (interval) clearInterval(interval); };
+  }, [callConnected]);
+
+  const formatCallDuration = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const handleLogCall = useCallback((peerId: string, mode: 'audio' | 'video', durationSec: number) => {
+    const myId = String(user?.id || 'me');
+    const missed = durationSec === 0;
+    const text = missed
+      ? (mode === 'video' ? '📹 Appel vidéo manqué' : '📞 Appel audio manqué')
+      : (mode === 'video' ? `📹 Appel vidéo • ${formatCallDuration(durationSec)}` : `📞 Appel audio • ${formatCallDuration(durationSec)}`);
+
+    const newMsg: DirectMessage = {
+      id: `dm_call_${Date.now()}`,
+      senderId: myId,
+      recipientId: peerId,
+      text,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      readAt: null
+    };
+    setDirectMessages(prev => [...prev, newMsg]);
+    void apiService.sendDirectMessage(peerId, text, undefined, undefined, undefined, mode);
+  }, [user]);
+
   // ── handleEndCall déclaré tôt ─────────────────────────────────────────────
   const handleEndCall = useCallback(() => {
+    const call = currentCallRef.current;
+    if (call) {
+      handleLogCall(call.peerId, call.mode, callDurationRef.current);
+    }
     peerConnectionRef.current?.close();
     peerConnectionRef.current = null;
     localStreamRef.current?.getTracks().forEach(track => track.stop());
@@ -241,10 +283,12 @@ export default function App() {
     setActiveCall(null);
     setCallConnected(false);
     setIncomingCall(null);
+    setLocalStream(null);
+    setRemoteStream(null);
     ringtoneRef.current?.pause();
     if (ringtoneRef.current) ringtoneRef.current.currentTime = 0;
     window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'call_ended' } }));
-  }, []);
+  }, [handleLogCall]);
 
   // Écouter le raccrochage émis par InboxView
   useEffect(() => {
@@ -279,7 +323,7 @@ export default function App() {
   try {
     stream = await navigator.mediaDevices.getUserMedia({ 
       audio: { echoCancellation: true, noiseSuppression: true },
-      video: false 
+      video: mode === 'video' ? { width: 640, height: 480 } : false
     });
   } catch (e: any) {
     console.error('getUserMedia error:', e.name, e.message);
@@ -295,6 +339,7 @@ export default function App() {
 
   try {
     localStreamRef.current = stream;
+    setLocalStream(stream);
     if (localVideoRef.current) localVideoRef.current.srcObject = stream;
     const pc = new RTCPeerConnection({ 
       iceServers: [
@@ -311,6 +356,7 @@ export default function App() {
       }
     };
    pc.ontrack = (event) => {
+    setRemoteStream(event.streams[0]);
     if (remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = event.streams[0];
       void remoteVideoRef.current.play().catch(() => undefined);
@@ -786,6 +832,7 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
         return await navigator.mediaDevices.getUserMedia({ audio: true });
       });
       localStreamRef.current = stream;
+      setLocalStream(stream);
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
       const pc = new RTCPeerConnection({ iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] });
       peerConnectionRef.current = pc;
@@ -794,6 +841,7 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
         if (event.candidate) void apiService.sendCallSignal(peerId, event.candidate.toJSON(), 'ice-candidate');
       };
       pc.ontrack = (event) => {
+        setRemoteStream(event.streams[0]);
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = event.streams[0];
           void remoteVideoRef.current.play().catch(() => undefined);
@@ -961,8 +1009,8 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
             peerAvatar={friends.find(f => f.id === activeCall.peerId)?.avatar}
             mode={activeCall.mode}
             connected={callConnected}
-            localVideoRef={localVideoRef}
-            remoteVideoRef={remoteVideoRef}
+            localStream={localStream}
+            remoteStream={remoteStream}
             onHangUp={handleEndCall}
           />
         )}

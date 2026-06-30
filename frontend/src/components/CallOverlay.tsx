@@ -6,8 +6,8 @@ interface CallOverlayProps {
   peerAvatar?: string;
   mode: 'audio' | 'video';
   connected: boolean;
-  localVideoRef: React.RefObject<HTMLVideoElement>;
-  remoteVideoRef: React.RefObject<HTMLVideoElement>;
+  localStream: MediaStream | null;
+  remoteStream: MediaStream | null;
   onHangUp: () => void;
   onToggleMute?: () => void;
   isMuted?: boolean;
@@ -28,14 +28,29 @@ export default function CallOverlay({
   peerAvatar,
   mode,
   connected,
-  localVideoRef,
-  remoteVideoRef,
+  localStream,
+  remoteStream,
   onHangUp,
   onToggleMute,
   isMuted
 }: CallOverlayProps) {
   const [duration, setDuration] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream;
+    }
+  }, [localStream]);
+
+  useEffect(() => {
+    if (remoteVideoRef.current && remoteStream) {
+      remoteVideoRef.current.srcObject = remoteStream;
+      remoteVideoRef.current.play().catch(() => {});
+    }
+  }, [remoteStream]);
 
   // ── Décompte : démarre uniquement une fois la connexion établie ──────────
   useEffect(() => {
