@@ -129,6 +129,9 @@ export default function App() {
   const [activeCall, setActiveCall] = useState<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
   // FIX : incomingCall est l'interface qui s'affiche chez le DESTINATAIRE
   const [incomingCall, setIncomingCall] = useState<{ peerId: string; mode: 'audio' | 'video'; signal: any } | null>(null);
+  useEffect(() => {
+  incomingCallRef.current = incomingCall;
+}, [incomingCall]);
 
   const peerConnectionRef = useRef<any>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -136,6 +139,7 @@ export default function App() {
   const currentCallRef = useRef<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
   const pendingCallRef = useRef<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  const incomingCallRef = useRef<{ peerId: string; mode: 'audio' | 'video'; signal: any } | null>(null);
 
   const [posts, setPosts] = useState<CommunityPost[]>(() => {
     const saved = localStorage.getItem('spirittalk_posts');
@@ -243,55 +247,75 @@ export default function App() {
   }, [handleEndCall]);
 
   // ── Accepter l'appel entrant ──────────────────────────────────────────────
-  const handleAcceptCall = useCallback(async () => {
-    if (!incomingCall) return;
-    const { peerId, signal } = incomingCall;
-    setIncomingCall(null);
-    try {
-      // APRÈS
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      } catch (e) {
-        alert("Autorisez le microphone dans les paramètres du navigateur puis réessayez.");
-        return;
-      }
-      localStreamRef.current = stream;
-      const pc = new RTCPeerConnection({ iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] });
-      peerConnectionRef.current = pc;
-      stream.getTracks().forEach(track => pc.addTrack(track, stream));
-      pc.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
-        if (event.candidate) {
-          void apiService.sendCallSignal(peerId, event.candidate.toJSON(), 'ice-candidate');
-        }
-      };
-      pc.ontrack = (event) => {
-        if (remoteAudioRef.current) {
-          remoteAudioRef.current.srcObject = event.streams[0];
-          void remoteAudioRef.current.play().catch(() => undefined);
-        }
-      };
-      // FIX : s'assurer que signal est bien un RTCSessionDescriptionInit
-      const sessionDesc = new RTCSessionDescription({ type: signal.type, sdp: signal.sdp });
-      await pc.setRemoteDescription(sessionDesc);
-      // APRÈS
-      for (const candidate of pendingCandidatesRef.current) {
-        try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
-      }
-      pendingCandidatesRef.current = [];
-      
-      const answer = await pc.createAnswer();
-      const callMode = incomingCall.mode;
-      await pc.setLocalDescription(answer);
-      await apiService.sendCallSignal(peerId, answer, 'answer');
-      currentCallRef.current = { peerId, mode: callMode };
-      setActiveCall({ peerId, mode: callMode });
-      window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'call_accepted' } }));
-    } catch (error) {
-      console.warn('Could not answer call', error);
-      alert("Impossible d'accéder au microphone.");
+ const handleAcceptCall = useCallback(async () => {
+  const call = incomingCallRef.current;
+  if (!call) return;
+  const { peerId, signal, mode } = call;
+  setIncomingCall(null);
+  incomingCallRef.current = null;
+
+  let stream: MediaStream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ 
+      audio: { echoCancellation: true, noiseSuppression: true },
+      video: false 
+    });
+  } catch (e: any) {
+    console.error('getUserMedia error:', e.name, e.message);
+    if (e.name === 'NotAllowedError') {
+      alert("Permission microphone refusée. Autorisez le microphone dans les paramètres du navigateur.");
+    } else if (e.name === 'NotFoundError') {
+      alert("Aucun microphone détecté.");
+    } else {
+      alert("Microphone inaccessible : " + e.message);
     }
-  }, [incomingCall]);
+    return;
+  }
+
+  try {
+    localStreamRef.current = stream;
+    const pc = new RTCPeerConnection({ 
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ] 
+    });
+    peerConnectionRef.current = pc;
+    stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+    pc.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
+      if (event.candidate) {
+        void apiService.sendCallSignal(peerId, event.candidate.toJSON(), 'ice-candidate');
+      }
+    };
+    pc.ontrack = (event) => {
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = event.streams[0];
+        void remoteAudioRef.current.play().catch(() => undefined);
+      }
+    };
+
+    const sessionDesc = new RTCSessionDescription({ type: signal.type, sdp: signal.sdp });
+    await pc.setRemoteDescription(sessionDesc);
+
+    for (const candidate of pendingCandidatesRef.current) {
+      try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+    }
+    pendingCandidatesRef.current = [];
+
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await apiService.sendCallSignal(peerId, { sdp: answer.sdp, type: answer.type }, 'answer');
+
+    currentCallRef.current = { peerId, mode };
+    setActiveCall({ peerId, mode });
+    window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'call_accepted' } }));
+  } catch (error: any) {
+    console.warn('Could not answer call', error);
+    alert("Erreur lors de la connexion : " + error.message);
+    stream.getTracks().forEach(t => t.stop());
+  }
+}, []);
 
   const handleDeclineCall = useCallback(() => {
     setIncomingCall(null);
