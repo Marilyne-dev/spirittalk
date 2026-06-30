@@ -14,6 +14,7 @@ import AuthView from './components/AuthView';
 import { apiService } from './services/api';
 import { generateLocalAiResponse } from './services/localAiService';
 import { pusherService } from './services/pusherService';
+import CallOverlay from './components/CallOverlay';
 
 const PRE_SEEDED_CHAT: ChatMessage[] = [
   {
@@ -127,6 +128,8 @@ export default function App() {
 
   // ── APPELS : états partagés App ──────────────────────────────────────────
   const [activeCall, setActiveCall] = useState<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
+  const [callConnected, setCallConnected] = useState(false);
+
   // FIX : incomingCall est l'interface qui s'affiche chez le DESTINATAIRE
   const [incomingCall, setIncomingCall] = useState<{ peerId: string; mode: 'audio' | 'video'; signal: any } | null>(null);
   useEffect(() => {
@@ -135,7 +138,6 @@ export default function App() {
 
   const peerConnectionRef = useRef<any>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
-  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const currentCallRef = useRef<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
   const pendingCallRef = useRef<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
@@ -237,6 +239,7 @@ export default function App() {
     currentCallRef.current = null;
     pendingCallRef.current = null;
     setActiveCall(null);
+    setCallConnected(false);
     setIncomingCall(null);
     ringtoneRef.current?.pause();
     if (ringtoneRef.current) ringtoneRef.current.currentTime = 0;
@@ -251,6 +254,16 @@ export default function App() {
     window.addEventListener('spirittalk_call_event', handler);
     return () => window.removeEventListener('spirittalk_call_event', handler);
   }, [handleEndCall]);
+
+// ── Marquer l'appel comme connecté (déclenche le décompte) ────────────────
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (e.detail?.type === 'call_accepted') setCallConnected(true);
+      if (e.detail?.type === 'call_ended') setCallConnected(false);
+    };
+    window.addEventListener('spirittalk_call_event', handler);
+    return () => window.removeEventListener('spirittalk_call_event', handler);
+  }, []);
 
   // ── Accepter l'appel entrant ──────────────────────────────────────────────
  const handleAcceptCall = useCallback(async () => {
@@ -781,9 +794,9 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
         if (event.candidate) void apiService.sendCallSignal(peerId, event.candidate.toJSON(), 'ice-candidate');
       };
       pc.ontrack = (event) => {
-        if (remoteAudioRef.current) {
-          remoteAudioRef.current.srcObject = event.streams[0];
-          void remoteAudioRef.current.play().catch(() => undefined);
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = event.streams[0];
+          void remoteVideoRef.current.play().catch(() => undefined);
         }
       };
       currentCallRef.current = { peerId, mode };
@@ -876,7 +889,7 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
       {user && <div>
         <div className="min-h-screen bg-cream-base dark:bg-charcoal-dark text-slate-800 dark:text-cream-base flex flex-col md:flex-row transition-colors duration-300">
           
-          <audio ref={ringtoneRef} src="/ringtone.aac" loop className="hidden"/>
+          <audio ref={ringtoneRef} src="/ringtone.mp3" loop className="hidden"/>
 
           {/* ══════════════════════════════════════════════════════════════════
               ÉCRAN D'APPEL ENTRANT (affiché partout dans l'app)
@@ -942,49 +955,17 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
             </div>
           )}
 
-          {activeCall && (
-                <div className="fixed inset-0 z-[998] flex flex-col items-center justify-center bg-black text-white">
-                  {activeCall.mode === 'video' ? (
-                    <>
-                      <video
-                        ref={remoteVideoRef}
-                        autoPlay
-                        playsInline
-                        className="absolute inset-0 w-full h-full object-cover"
-                      />
-                      <video
-                        ref={localVideoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        className="absolute bottom-24 right-4 w-28 h-40 rounded-xl object-cover border-2 border-white/40 shadow-lg z-10"
-                      />
-                    </>
-                  ) : (
-                    <>
-                      {/* l'audio distant doit quand même jouer en mode audio */}
-                      <video ref={remoteVideoRef} autoPlay playsInline className="hidden" />
-                      <div className="w-28 h-28 rounded-full bg-emerald-medium/20 flex items-center justify-center mb-6">
-                        <Phone className="w-10 h-10 text-emerald-medium" />
-                      </div>
-                    </>
-                  )}
-
-                  <div className="relative z-10 mt-4 text-center bg-black/40 px-6 py-3 rounded-2xl backdrop-blur-sm">
-                    <p className="font-serif text-lg font-bold">
-                      {friends.find(f => f.id === activeCall.peerId)?.name || 'En communication'}
-                    </p>
-                    <p className="text-xs text-white/70">En communication</p>
-                  </div>
-
-                  <button
-                    onClick={handleEndCall}
-                    className="relative z-10 mt-8 p-5 rounded-full bg-red-500 hover:bg-red-600 active:scale-95 transition-all shadow-xl"
-                  >
-                    <PhoneOff className="w-7 h-7" />
-                  </button>
-                </div>
-              )}
+         {activeCall && (
+          <CallOverlay
+            peerName={friends.find(f => f.id === activeCall.peerId)?.name || 'Communauté SpiritTalk'}
+            peerAvatar={friends.find(f => f.id === activeCall.peerId)?.avatar}
+            mode={activeCall.mode}
+            connected={callConnected}
+            localVideoRef={localVideoRef}
+            remoteVideoRef={remoteVideoRef}
+            onHangUp={handleEndCall}
+          />
+        )}
 
           {/* Sidebar Desktop */}
           <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-20 flex-col items-center py-6 gap-8 border-r border-cream-darker dark:border-charcoal-light/10 bg-white/70 dark:bg-charcoal-card/70 backdrop-blur-md z-40">

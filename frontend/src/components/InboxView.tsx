@@ -114,17 +114,9 @@ useEffect(() => {
     return () => window.removeEventListener('spirittalk_call_event', handler);
   }, []);
 
-  // ── Lancer un appel ───────────────────────────────────────────────────────
+  // ── Lancer un appel (l'interface est gérée globalement par App.tsx) ───────
   const handleStartCallLocal = (friendId: string, mode: 'audio' | 'video') => {
-    setOutgoingCall({ friendId, mode });
-    setCallIsActive(false);
     onStartCall(friendId, mode);
-  };
-
-  const handleHangUp = () => {
-    setOutgoingCall(null);
-    setCallIsActive(false);
-    window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'hang_up' } }));
   };
 
   const formatDuration = (sec: number) => {
@@ -245,51 +237,6 @@ useEffect(() => {
 
   return (
     <div className="h-[70vh] bg-white dark:bg-charcoal-card border border-cream-darker dark:border-charcoal-light/10 rounded-3xl shadow-sm overflow-hidden flex relative">
-
-      {/* ══════════════════════════════════════════════════════════════════
-          OVERLAY APPEL SORTANT
-      ══════════════════════════════════════════════════════════════════ */}
-      {outgoingCall && outgoingFriend && !callIsActive && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md">
-          <div className="text-center text-white space-y-8 px-8 w-full max-w-md">
-
-            {/* Video Remote (si vidéo et actif) */}
-            {outgoingCall.mode === 'video' && callIsActive && (
-                <video 
-                    ref={(ref) => { if (ref && remoteStream) ref.srcObject = remoteStream; }}
-                    autoPlay playsInline 
-                    className="absolute inset-0 w-full h-full object-cover opacity-60"
-                />
-            )}
-
-            <div className="relative mx-auto w-28 h-28 z-10">
-              <img
-                src={outgoingFriend.avatar}
-                alt={outgoingFriend.name}
-                className="w-28 h-28 rounded-full object-cover border-4 border-emerald-medium mx-auto shadow-2xl"
-              />
-              {!callIsActive && <span className="absolute inset-0 rounded-full border-4 border-emerald-medium animate-ping" />}
-            </div>
-
-            <div className="space-y-1 z-10 relative">
-              <p className="text-[11px] uppercase tracking-widest text-emerald-light font-bold">
-                {outgoingCall.mode === 'video' ? '📹 Appel vidéo' : '📞 Appel audio'}
-              </p>
-              <h3 className="font-serif text-2xl font-bold">{outgoingFriend.name}</h3>
-              <p className="text-sm text-white/60 mt-2">
-                {callIsActive ? `En communication • ${formatDuration(callDuration)}` : 'Appel en cours...'}
-              </p>
-            </div>
-
-            <button
-              onClick={handleHangUp}
-              className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center mx-auto relative z-10 shadow-xl active:scale-90 transition-all"
-            >
-              <PhoneOff className="w-7 h-7 text-white" />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* ══════════════════════════════════════════════════════════════════
           SIDEBAR AMIS
