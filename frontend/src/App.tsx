@@ -135,6 +135,7 @@ export default function App() {
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const currentCallRef = useRef<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
   const pendingCallRef = useRef<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
+  const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
 
   const [posts, setPosts] = useState<CommunityPost[]>(() => {
     const saved = localStorage.getItem('spirittalk_posts');
@@ -247,7 +248,10 @@ export default function App() {
     const { peerId, signal } = incomingCall;
     setIncomingCall(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      // APRÈS
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {
+        throw new Error('Microphone inaccessible');
+      });
       localStreamRef.current = stream;
       const pc = new RTCPeerConnection({ iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] });
       peerConnectionRef.current = pc;
@@ -266,6 +270,12 @@ export default function App() {
       // FIX : s'assurer que signal est bien un RTCSessionDescriptionInit
       const sessionDesc = signal instanceof RTCSessionDescription ? signal : new RTCSessionDescription(signal);
       await pc.setRemoteDescription(sessionDesc);
+      // APRÈS
+      for (const candidate of pendingCandidatesRef.current) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+      }
+      pendingCandidatesRef.current = [];
+      
       const answer = await pc.createAnswer();
       const callMode = incomingCall.mode;
       await pc.setLocalDescription(answer);
@@ -363,26 +373,33 @@ export default function App() {
         }
 
         // ── RÉPONSE : côté appelant, finaliser la connexion ──
-        if (callPayload.type === 'answer' && peerConnectionRef.current) {
-          try {
-            const sessionDesc = callPayload.signal instanceof RTCSessionDescription
-              ? callPayload.signal
-              : new RTCSessionDescription(callPayload.signal);
-            await peerConnectionRef.current.setRemoteDescription(sessionDesc);
-            window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'call_accepted' } }));
-          } catch (err) {
-            console.warn('Failed to set remote description from answer', err);
-          }
-        }
+        // APRÈS
+if (callPayload.type === 'answer' && peerConnectionRef.current) {
+  try {
+    const sessionDesc = callPayload.signal instanceof RTCSessionDescription
+      ? callPayload.signal
+      : new RTCSessionDescription(callPayload.signal);
+    await peerConnectionRef.current.setRemoteDescription(sessionDesc);
+    for (const candidate of pendingCandidatesRef.current) {
+      try { await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+    }
+    pendingCandidatesRef.current = [];
+    window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'call_accepted' } }));
+  } catch (err) {
+    console.warn('Failed to set remote description from answer', err);
+  }
+}
 
         // ── ICE CANDIDATE ──
-        if (callPayload.type === 'ice-candidate' && peerConnectionRef.current) {
-          try {
-            await peerConnectionRef.current.addIceCandidate(
-              new RTCIceCandidate(callPayload.signal)
-            );
-          } catch (err) {
-            console.warn('Failed to add ICE candidate', err);
+      // APRÈS
+        if (callPayload.type === 'ice-candidate') {
+          const pc = peerConnectionRef.current;
+          if (pc && pc.remoteDescription) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(callPayload.signal));
+            } catch {}
+          } else {
+            pendingCandidatesRef.current.push(callPayload.signal);
           }
         }
       }
@@ -709,7 +726,12 @@ export default function App() {
   const setupWebRtc = useCallback(async (peerId: string, mode: 'audio' | 'video' = 'audio') => {
     if (!user) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: mode === 'video' });
+      // APRÈS
+      const constraints: MediaStreamConstraints = { audio: true };
+      if (mode === 'video') constraints.video = { width: 640, height: 480 };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints).catch(async () => {
+        return await navigator.mediaDevices.getUserMedia({ audio: true });
+      });
       localStreamRef.current = stream;
       const pc = new RTCPeerConnection({ iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] });
       peerConnectionRef.current = pc;
