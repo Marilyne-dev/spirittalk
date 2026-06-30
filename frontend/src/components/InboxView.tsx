@@ -203,14 +203,27 @@ useEffect(() => {
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-    Array.from(files).forEach((file: any) => {
-      const reader = new FileReader();
-      reader.onloadend = () => setAttachedImages(prev => [...prev, reader.result as string]);
-      reader.readAsDataURL(file);
-    });
-  };
+  const files = e.target.files;
+  if (!files) return;
+  Array.from(files).forEach((file: any) => {
+    const canvas = document.createElement('canvas');
+    const img = new window.Image();
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      img.onload = () => {
+        const MAX = 400;
+        let w = img.width, h = img.height;
+        if (w > MAX) { h = h * MAX / w; w = MAX; }
+        if (h > MAX) { w = w * MAX / h; h = MAX; }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+        setAttachedImages(prev => [...prev, canvas.toDataURL('image/jpeg', 0.5)]);
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+};
 
   // ── FILTRE DES MESSAGES (Correction IDs) ──────────────────────────────────
   const activeMessages = messages.filter(m => {
@@ -350,8 +363,8 @@ useEffect(() => {
                   }`}>
                     {msg.text && <p>{msg.text}</p>}
                     {msg.audioUrl && (
-                      <button 
-                        onClick={() => new Audio(msg.audioUrl).play()}
+  <button 
+    onClick={() => { const a = new Audio(msg.audioUrl); a.play().catch(() => alert('Impossible de lire')); }}
                         className="flex items-center gap-2 p-2 bg-black/10 rounded-xl"
                       >
                         <Play className="w-3 h-3 fill-current" />
