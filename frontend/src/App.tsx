@@ -249,9 +249,13 @@ export default function App() {
     setIncomingCall(null);
     try {
       // APRÈS
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {
-        throw new Error('Microphone inaccessible');
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      } catch (e) {
+        alert("Autorisez le microphone dans les paramètres du navigateur puis réessayez.");
+        return;
+      }
       localStreamRef.current = stream;
       const pc = new RTCPeerConnection({ iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] });
       peerConnectionRef.current = pc;
@@ -268,7 +272,7 @@ export default function App() {
         }
       };
       // FIX : s'assurer que signal est bien un RTCSessionDescriptionInit
-      const sessionDesc = signal instanceof RTCSessionDescription ? signal : new RTCSessionDescription(signal);
+      const sessionDesc = new RTCSessionDescription({ type: signal.type, sdp: signal.sdp });
       await pc.setRemoteDescription(sessionDesc);
       // APRÈS
       for (const candidate of pendingCandidatesRef.current) {
@@ -376,9 +380,7 @@ export default function App() {
         // APRÈS
 if (callPayload.type === 'answer' && peerConnectionRef.current) {
   try {
-    const sessionDesc = callPayload.signal instanceof RTCSessionDescription
-      ? callPayload.signal
-      : new RTCSessionDescription(callPayload.signal);
+    const sessionDesc = new RTCSessionDescription({ type: callPayload.signal.type, sdp: callPayload.signal.sdp });
     await peerConnectionRef.current.setRemoteDescription(sessionDesc);
     for (const candidate of pendingCandidatesRef.current) {
       try { await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
@@ -750,7 +752,7 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       // FIX : envoyer l'offre avec type explicite pour que Pusher puisse router
-      await apiService.sendCallSignal(peerId, { ...offer, callMode: mode }, 'offer');
+      await apiService.sendCallSignal(peerId, { sdp: offer.sdp, type: offer.type, callMode: mode }, 'offer');
     } catch (error) {
       console.warn('WebRTC setup failed', error);
       window.alert("Votre navigateur bloque l'accès au microphone.");
