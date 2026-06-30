@@ -51,7 +51,7 @@ Route::get('/test-final', function() { return 'ok'; });
 // ✅ FIX : routes non protégées — read/unread peuvent se faire sans auth
 Route::post('/direct-messages/mark-read/{senderId}', [DirectMessageController::class, 'markRead']);
 Route::get('/direct-messages/unread-counts', [DirectMessageController::class, 'unreadCounts']);
-    
+
 // Proxy Bible API
 Route::get('/bible', function (\Illuminate\Http\Request $request) {
     $book = $request->query('book');
@@ -142,6 +142,6 @@ Route::get('/quran', function (\Illuminate\Http\Request $request) {
     }
     return response($result, 200)->header('Content-Type', 'application/json');
 });
-
+Route::post('/upload-audio', [App\Http\Controllers\UploadController::class, 'audio']);
 
 

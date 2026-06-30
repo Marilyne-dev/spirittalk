@@ -182,9 +182,12 @@ useEffect(() => {
         streamRef.current?.getTracks().forEach(t => t.stop());
 
         const reader = new FileReader();
-        reader.onloadend = () => {
+        // APRÈS
+        reader.onloadend = async () => {
           const base64 = reader.result as string;
-          onSendMessage(selectedFriendId!, undefined, undefined, base64, formatDuration(durationAtStop));
+          // Upload sur le serveur et envoyer l'URL
+          const url = await apiService.uploadAudio(base64);
+          onSendMessage(selectedFriendId!, undefined, undefined, url || base64, formatDuration(durationAtStop));
         };
         reader.readAsDataURL(blob);
       };

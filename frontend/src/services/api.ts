@@ -118,6 +118,21 @@ export const apiService = {
     }
   },
 
+  async uploadAudio(base64: string): Promise<string | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/upload-audio`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ audio: base64 }),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.url;
+  } catch {
+    return null;
+  }
+},
+
   async logout() {
     try {
       await fetch(`${API_BASE_URL}/logout`, {
