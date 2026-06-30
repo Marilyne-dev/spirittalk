@@ -126,7 +126,17 @@ export default function App() {
 
   const [currentTab, setCurrentTab] = useState<'home' | 'community' | 'inbox' | 'chat' | 'search' | 'profile' | 'videos'>('home');
   const [darkMode, setDarkMode] = useState<boolean>(false);
-
+  // Ajoute cet état après les autres useState
+    const [showNotifications, setShowNotifications] = useState(false);
+    useEffect(() => {
+    if (!showNotifications) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-notif-panel]')) setShowNotifications(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showNotifications]);
   // ── APPELS : états partagés App ──────────────────────────────────────────
   const [activeCall, setActiveCall] = useState<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
   const [callConnected, setCallConnected] = useState(false);
@@ -719,7 +729,11 @@ export default function App() {
     handleSendMessage(prompt);
   };
 
-  const handleNotificationClick = () => alert("Vos notifications spirituelles sont à jour !");
+    const handleNotificationClick = () => {
+    setShowNotifications(prev => !prev);
+    // Marquer toutes comme lues
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+  };
 
   const handleUpdateProfile = async (updates: { name: string; email: string; religion: Religion; avatar: string; profession?: string; password?: string }) => {
     const result = await apiService.updateProfile(updates);
@@ -1026,57 +1040,91 @@ export default function App() {
 
           {/* Main Content */}
           <div className="flex-grow md:pl-20 flex flex-col">
-            <header className="sticky top-0 w-full z-40 flex justify-between items-center px-4 md:px-8 h-16 bg-cream-base/80 dark:bg-charcoal-dark/85 backdrop-blur-md border-b border-cream-darker dark:border-charcoal-light/10">
-              <h1 className="font-serif text-xl md:text-2xl font-bold tracking-tight text-emerald-deep dark:text-gold-bright">SpiritTalk</h1>
-              <div className="flex items-center gap-2">
-                <div className="hidden sm:flex items-center gap-1 bg-emerald-medium/5 dark:bg-charcoal-card px-3 py-1.5 rounded-lg border border-emerald-medium/10">
-                  <Award className="w-3.5 h-3.5 text-gold-deep dark:text-gold-bright" />
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-medium dark:text-cream-base/75">{xp} XP</span>
-                </div>
-                <button onClick={() => setDarkMode(prev => !prev)} className="md:hidden p-2 text-slate-500 dark:text-cream-base/60 hover:bg-cream-darker dark:hover:bg-charcoal-light/25 rounded-lg transition-colors">
-                  {darkMode ? <Sun className="w-4 h-4 text-gold-bright" /> : <Moon className="w-4 h-4" />}
-                </button>
-                <button onClick={handleNotificationClick} className="p-2 text-slate-500 dark:text-cream-base/60 hover:bg-cream-darker dark:hover:bg-charcoal-light/25 rounded-lg transition-colors relative">
-                  <Bell className="w-4 h-4" />
-                  <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-gold-deep rounded-full animate-ping" />
-                </button>
-              </div>
-            </header>
+              <header className="sticky top-0 w-full z-40 flex justify-between items-center px-4 md:px-8 h-16 bg-cream-base/80 dark:bg-charcoal-dark/85 backdrop-blur-md border-b border-cream-darker dark:border-charcoal-light/10">
+                <h1 className="font-serif text-xl md:text-2xl font-bold tracking-tight text-emerald-deep dark:text-gold-bright">SpiritTalk</h1>
+                <div className="flex items-center gap-2">
+                  <div className="hidden sm:flex items-center gap-1 bg-emerald-medium/5 dark:bg-charcoal-card px-3 py-1.5 rounded-lg border border-emerald-medium/10">
+                    <Award className="w-3.5 h-3.5 text-gold-deep dark:text-gold-bright" />
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-medium dark:text-cream-base/75">{xp} XP</span>
+                  </div>
+                  <button onClick={() => setDarkMode(prev => !prev)} className="md:hidden p-2 text-slate-500 dark:text-cream-base/60 hover:bg-cream-darker dark:hover:bg-charcoal-light/25 rounded-lg transition-colors">
+                    {darkMode ? <Sun className="w-4 h-4 text-gold-bright" /> : <Moon className="w-4 h-4" />}
+                  </button>
 
-            <main className="flex-grow p-4 md:p-8 max-w-[1000px] mx-auto w-full">
-              {currentTab === 'home' && (
-                <HomeView user={user} xp={xp} streak={streak} onOpenQuiz={() => setIsQuizOpen(true)} onSelectInspiration={setSelectedInspiration} onBookmark={handleAddBookmark} onAddXP={handleAddXP} onNavigateToChatWithQuery={handleNavigateToChatWithQuery} posts={posts} onAddPost={handleCreatePost} onLikePost={handleLikePost} />
-              )}
-              {currentTab === 'community' && (
-                <CommunityView user={user} posts={posts} friends={friends} notifications={notifications} onAddPost={handleCreatePost} onLikePost={handleLikePost} onAddComment={handleAddComment} onSendFriendRequest={handleSendFriendRequest} onAcceptFriendRequest={handleAcceptFriendRequest} onRemoveFriend={handleRemoveFriend} onClearNotification={(notifId) => setNotifications(prev => prev.filter(n => n.id !== notifId))} onNavigateToChat={() => setCurrentTab('inbox')} onSearchMembers={handleSearchMembers} />
-              )}
-              {currentTab === 'inbox' && (
-                <InboxView
-                  user={user}
-                  friends={friends}
-                  messages={directMessages}
-                  unreadCounts={unreadCounts}
-                  onSendMessage={handleSendDirectMessage}
-                  onSimulateTyping={handleSimulateTyping}
-                  onSelectFriend={(friendId) => {
-                    setUnreadCounts(prev => { const c = { ...prev }; delete c[friendId]; return c; });
-                  }}
-                  onStartCall={handleStartCall}
-                />
-              )}
-              {currentTab === 'chat' && (
-                <ChatView messages={chatMessages} onSendMessage={handleSendMessage} onBookmark={handleAddBookmark} isGenerating={isGenerating} />
-              )}
-              {currentTab === 'videos' && (
-                <VideoView />
-              )}
-              {currentTab === 'search' && (
-                <SearchView onBookmark={handleAddBookmark} onNavigateToChatWithQuery={handleNavigateToChatWithQuery} />
-              )}
-              {currentTab === 'profile' && (
-                <ProfileView user={user} xp={xp} streak={streak} bookmarks={bookmarks} notes={notes} onCheckIn={handleCheckIn} onRemoveBookmark={handleRemoveBookmark} onAddNote={handleAddNote} onDeleteNote={handleDeleteNote} onNavigateToChatWithQuery={handleNavigateToChatWithQuery} hasCheckedInToday={hasCheckedInToday} onUpdateProfile={handleUpdateProfile} onLogout={handleLogout} />
-              )}
-            </main>
+                  {/* ✅ Panneau notifications */}
+                  <div className="relative" data-notif-panel>
+                    <button
+                      onClick={handleNotificationClick}
+                      className="p-2 text-slate-500 dark:text-cream-base/60 hover:bg-cream-darker dark:hover:bg-charcoal-light/25 rounded-lg transition-colors relative"
+                    >
+                      <Bell className="w-4 h-4" />
+                      {notifications.filter(n => !n.isRead).length > 0 && (
+                        <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+                      )}
+                    </button>
+
+                    {showNotifications && (
+                      <div className="absolute right-0 top-12 w-80 bg-white dark:bg-charcoal-card rounded-2xl shadow-2xl border border-cream-darker dark:border-charcoal-light/10 z-50 overflow-hidden">
+                        <div className="p-4 border-b border-cream-darker dark:border-charcoal-light/10 flex justify-between items-center">
+                          <h3 className="font-serif text-sm font-bold text-emerald-deep dark:text-cream-base">Notifications</h3>
+                          <button onClick={() => setShowNotifications(false)} className="text-slate-400 text-xs hover:text-slate-600">Fermer</button>
+                        </div>
+                        <div className="max-h-80 overflow-y-auto">
+                          {notifications.length === 0 ? (
+                            <div className="p-6 text-center text-slate-400 text-xs italic">
+                              Aucune notification pour l'instant 🕊️
+                            </div>
+                          ) : (
+                            notifications.slice(0, 10).map(n => (
+                              <div key={n.id} className={`p-4 border-b border-cream-darker dark:border-charcoal-light/5 hover:bg-cream-base dark:hover:bg-charcoal-dark/30 transition-colors ${!n.isRead ? 'bg-emerald-medium/5' : ''}`}>
+                                <p className="text-xs font-bold text-emerald-deep dark:text-cream-base">{n.title}</p>
+                                <p className="text-[11px] text-slate-500 dark:text-cream-base/60 mt-0.5">{n.description}</p>
+                                <p className="text-[10px] text-slate-400 mt-1">{n.time}</p>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </header>
+
+                  <main className="flex-grow p-4 md:p-8 max-w-[1000px] mx-auto w-full">
+                      {currentTab === 'home' && (
+                        <HomeView user={user} xp={xp} streak={streak} onOpenQuiz={() => setIsQuizOpen(true)} onSelectInspiration={setSelectedInspiration} onBookmark={handleAddBookmark} onAddXP={handleAddXP} onNavigateToChatWithQuery={handleNavigateToChatWithQuery} posts={posts} onAddPost={handleCreatePost} onLikePost={handleLikePost} />
+                      )}
+                      {currentTab === 'community' && (
+                        <CommunityView user={user} posts={posts} friends={friends} notifications={notifications} onAddPost={handleCreatePost} onLikePost={handleLikePost} onAddComment={handleAddComment} onSendFriendRequest={handleSendFriendRequest} onAcceptFriendRequest={handleAcceptFriendRequest} onRemoveFriend={handleRemoveFriend} onClearNotification={(notifId) => setNotifications(prev => prev.filter(n => n.id !== notifId))} onNavigateToChat={() => setCurrentTab('inbox')} onSearchMembers={handleSearchMembers} />
+                      )}
+                      {currentTab === 'inbox' && (
+                        <InboxView
+                          user={user}
+                          friends={friends}
+                          messages={directMessages}
+                          unreadCounts={unreadCounts}
+                          onSendMessage={handleSendDirectMessage}
+                          onSimulateTyping={handleSimulateTyping}
+                          onSelectFriend={(friendId) => {
+                            setUnreadCounts(prev => { const c = { ...prev }; delete c[friendId]; return c; });
+                          }}
+                          onStartCall={handleStartCall}
+                        />
+                      )}
+                      {currentTab === 'chat' && (
+                        <ChatView messages={chatMessages} onSendMessage={handleSendMessage} onBookmark={handleAddBookmark} isGenerating={isGenerating} />
+                      )}
+                      {currentTab === 'videos' && (
+                        <VideoView />
+                      )}
+                      {currentTab === 'search' && (
+                        <SearchView onBookmark={handleAddBookmark} onNavigateToChatWithQuery={handleNavigateToChatWithQuery} />
+                      )}
+                      {currentTab === 'profile' && (
+                        <ProfileView user={user} xp={xp} streak={streak} bookmarks={bookmarks} notes={notes} onCheckIn={handleCheckIn} onRemoveBookmark={handleRemoveBookmark} onAddNote={handleAddNote} onDeleteNote={handleDeleteNote} onNavigateToChatWithQuery={handleNavigateToChatWithQuery} hasCheckedInToday={hasCheckedInToday} onUpdateProfile={handleUpdateProfile} onLogout={handleLogout} />
+                      )}
+                    </main>
+
           </div>
 
           {/* Bottom Nav Mobile */}
