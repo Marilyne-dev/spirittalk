@@ -39,18 +39,28 @@ export default function CallOverlay({
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
 
-  useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
-    }
-  }, [localStream]);
+useEffect(() => {
+  if (localVideoRef.current && localStream) {
+    localVideoRef.current.srcObject = localStream;
+    console.log('Local stream tracks:', localStream.getVideoTracks().map(t => ({ enabled: t.enabled, readyState: t.readyState })));
+  }
+}, [localStream]);
 
-  useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) {
-      remoteVideoRef.current.srcObject = remoteStream;
-      remoteVideoRef.current.play().catch(() => {});
-    }
-  }, [remoteStream]);
+ useEffect(() => {
+  if (remoteVideoRef.current && remoteStream) {
+    const video = remoteVideoRef.current;
+    video.srcObject = remoteStream;
+    video.muted = true; // nécessaire pour que l'autoplay soit autorisé
+    video.play()
+      .then(() => {
+        // une fois la lecture lancée, on réactive le son
+        video.muted = false;
+      })
+      .catch((err) => {
+        console.warn('Lecture vidéo distante bloquée :', err.name, err.message);
+      });
+  }
+}, [remoteStream]);
 
   // ── Décompte : démarre uniquement une fois la connexion établie ──────────
   useEffect(() => {
