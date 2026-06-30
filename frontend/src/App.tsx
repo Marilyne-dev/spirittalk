@@ -510,13 +510,26 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
         ));
       },
 
-      // ── Commentaire reçu en temps réel ───────────────────────────────────
+     // ── Commentaire reçu en temps réel ───────────────────────────────────
       (payload) => {
-        setPosts(prev => prev.map(p =>
-          p.id === payload.postId
-            ? { ...p, comments: [...p.comments, payload.comment] }
-            : p
-        ));
+        setPosts(prev => prev.map(p => {
+          if (p.id !== payload.postId) return p;
+
+          // Déjà reçu (évite les doublons si l'événement arrive deux fois)
+          if (p.comments.some(c => c.id === payload.comment.id)) return p;
+
+          // Remplace le commentaire optimiste local par la version confirmée du serveur
+          const optimisticIdx = p.comments.findIndex(
+            c => c.id.startsWith('comment_local_') && c.content === payload.comment.content
+          );
+          if (optimisticIdx !== -1) {
+            const updatedComments = [...p.comments];
+            updatedComments[optimisticIdx] = payload.comment;
+            return { ...p, comments: updatedComments };
+          }
+
+          return { ...p, comments: [...p.comments, payload.comment] };
+        }));
       }
     );
 
@@ -546,27 +559,13 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
   }, [user]);
 
   // Charger posts backend
-  useEffect(() => {
+useEffect(() => {
     if (!user) return;
     const loadBackendInspirations = async () => {
       try {
         const data = await apiService.getInspirations();
         if (data && Array.isArray(data)) {
-          const mapped = data.map((item: any) => ({
-            id: item.id.toString(),
-            name: item.user?.name || 'Anonyme',
-            username: item.user?.username || 'user',
-            avatar: item.user?.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
-            content: item.content,
-            religion: item.user?.religion || 'Mixte',
-            likes: item.likes || item.likes_count || 0,
-            likedByMe: item.is_liked || false,
-            time: new Date(item.created_at).toLocaleDateString('fr-FR'),
-            verse_reference: item.verse_reference,
-            verse_text: item.verse_text,
-            comments: item.comments || []
-          }));
-          setPosts(mapped);
+          setPosts(data.map(mapInspiration));
         }
       } catch {}
     };
@@ -762,6 +761,27 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
     setUser(null);
   };
 
+const mapInspiration = (item: any): CommunityPost => ({
+  id: item.id.toString(),
+  name: item.user?.name || 'Anonyme',
+  username: item.user?.username || 'user',
+  avatar: item.user?.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
+  content: item.content,
+  religion: item.user?.religion || 'Mixte',
+  likes: item.likes || item.likes_count || 0,
+  likedByMe: item.is_liked || false,
+  time: new Date(item.created_at).toLocaleDateString('fr-FR'),
+  verse_reference: item.verse_reference,
+  verse_text: item.verse_text,
+  comments: (item.comments || []).map((c: any) => ({
+    id: String(c.id),
+    authorName: c.user?.name || 'Anonyme',
+    authorAvatar: c.user?.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
+    content: c.content,
+    time: c.created_at ? new Date(c.created_at).toLocaleDateString('fr-FR') : "À l'instant"
+  }))
+});
+
   const handleCreatePost = async (content: string, images?: string[], videoUrl?: string, verse_reference?: string, verse_text?: string) => {
     const newPost: CommunityPost = {
       id: `post_${Date.now()}`,
@@ -781,22 +801,9 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
       await apiService.createInspiration(content.trim(), verse_reference, verse_text,
         verse_reference ? (verse_reference.includes('Coran') ? 'Coran' : 'Bible') : undefined
       );
-      const data = await apiService.getInspirations();
+const data = await apiService.getInspirations();
       if (data && Array.isArray(data)) {
-        setPosts(data.map((item: any) => ({
-          id: item.id.toString(),
-          name: item.user?.name || 'Anonyme',
-          username: item.user?.username || 'user',
-          avatar: item.user?.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
-          content: item.content,
-          religion: item.user?.religion || 'Mixte',
-          likes: item.likes || item.likes_count || 0,
-          likedByMe: item.is_liked || false,
-          time: new Date(item.created_at).toLocaleDateString('fr-FR'),
-          verse_reference: item.verse_reference,
-          verse_text: item.verse_text,
-          comments: item.comments || []
-        })));
+        setPosts(data.map(mapInspiration));
       }
     } catch {}
   };
@@ -809,16 +816,29 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
     try { await apiService.likeInspiration(postId); } catch {}
   };
 
-  const handleAddComment = (postId: string, content: string) => {
-    const newComment = {
-      id: `comment_${Date.now()}`,
+  const handleAddComment = async (postId: string, content: string) => {
+    const trimmed = content.trim();
+    if (!trimmed) return;
+
+    const optimisticComment = {
+      id: `comment_local_${Date.now()}`,
       authorName: user.name || 'Chercheur anonyme',
       authorAvatar: user.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200",
-      content,
+      content: trimmed,
       time: "À l'instant"
     };
-    setPosts(prev => prev.map(post => post.id === postId ? { ...post, comments: [...post.comments, newComment] } : post));
+
+    // Affichage immédiat côté expéditeur, en attendant la confirmation serveur
+    setPosts(prev => prev.map(post =>
+      post.id === postId ? { ...post, comments: [...post.comments, optimisticComment] } : post
+    ));
     handleAddXP(10);
+
+    try {
+      await apiService.addInspirationComment(postId, trimmed);
+      // La version définitive arrive via l'événement Pusher 'post-commented'
+      // et remplacera automatiquement le commentaire optimiste (voir plus bas)
+    } catch {}
   };
 
   const playPusherPing = () => {
