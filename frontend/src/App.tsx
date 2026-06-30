@@ -140,6 +140,8 @@ export default function App() {
   const pendingCallRef = useRef<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const incomingCallRef = useRef<{ peerId: string; mode: 'audio' | 'video'; signal: any } | null>(null);
+  const ringtoneRef = useRef<HTMLAudioElement | null>(null);
+
 
   const [posts, setPosts] = useState<CommunityPost[]>(() => {
     const saved = localStorage.getItem('spirittalk_posts');
@@ -234,6 +236,9 @@ export default function App() {
     currentCallRef.current = null;
     pendingCallRef.current = null;
     setActiveCall(null);
+    setIncomingCall(null);
+    ringtoneRef.current?.pause();
+    if (ringtoneRef.current) ringtoneRef.current.currentTime = 0;
     window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'call_ended' } }));
   }, []);
 
@@ -253,6 +258,8 @@ export default function App() {
   const { peerId, signal, mode } = call;
   setIncomingCall(null);
   incomingCallRef.current = null;
+  ringtoneRef.current?.pause();
+  if (ringtoneRef.current) ringtoneRef.current.currentTime = 0;
 
   let stream: MediaStream;
   try {
@@ -295,7 +302,8 @@ export default function App() {
       }
     };
 
-    const sessionDesc = new RTCSessionDescription({ type: signal.type, sdp: signal.sdp });
+    const decodedSdp = decodeURIComponent(escape(atob(signal.sdp)));
+    const sessionDesc = new RTCSessionDescription({ type: signal.type, sdp: decodedSdp });
     await pc.setRemoteDescription(sessionDesc);
 
     for (const candidate of pendingCandidatesRef.current) {
@@ -305,7 +313,7 @@ export default function App() {
 
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
-    await apiService.sendCallSignal(peerId, { sdp: answer.sdp, type: answer.type }, 'answer');
+    await apiService.sendCallSignal(peerId, { sdp: btoa(unescape(encodeURIComponent(answer.sdp))), type: answer.type }, 'answer');
 
     currentCallRef.current = { peerId, mode };
     setActiveCall({ peerId, mode });
@@ -319,6 +327,8 @@ export default function App() {
 
   const handleDeclineCall = useCallback(() => {
     setIncomingCall(null);
+    ringtoneRef.current?.pause();
+    if (ringtoneRef.current) ringtoneRef.current.currentTime = 0;
   }, []);
 
   // ── Pusher : temps réel ───────────────────────────────────────────────────
@@ -391,20 +401,22 @@ export default function App() {
         if (targetId !== myId) return;    // ignorer les appels entre deux autres users
 
         // ── OFFRE D'APPEL : montrer l'écran d'appel entrant ──
-        if (callPayload.type === 'offer') {
-          setIncomingCall({
-            peerId,
-            mode: callPayload.signal?.callMode === 'video' ? 'video' : 'audio',
-            signal: callPayload.signal
-          });
-          return;
-        }
+      if (callPayload.type === 'offer') {
+      setIncomingCall({
+        peerId,
+        mode: callPayload.signal?.callMode === 'video' ? 'video' : 'audio',
+        signal: callPayload.signal
+      });
+      ringtoneRef.current?.play().catch(() => {});
+      return;
+    }
 
         // ── RÉPONSE : côté appelant, finaliser la connexion ──
         // APRÈS
 if (callPayload.type === 'answer' && peerConnectionRef.current) {
   try {
-    const sessionDesc = new RTCSessionDescription({ type: callPayload.signal.type, sdp: callPayload.signal.sdp });
+    const decodedSdp = decodeURIComponent(escape(atob(callPayload.signal.sdp)));
+    const sessionDesc = new RTCSessionDescription({ type: callPayload.signal.type, sdp: decodedSdp });
     await peerConnectionRef.current.setRemoteDescription(sessionDesc);
     for (const candidate of pendingCandidatesRef.current) {
       try { await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
@@ -776,7 +788,7 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       // FIX : envoyer l'offre avec type explicite pour que Pusher puisse router
-      await apiService.sendCallSignal(peerId, { sdp: offer.sdp, type: offer.type, callMode: mode }, 'offer');
+      await apiService.sendCallSignal(peerId, { sdp: btoa(unescape(encodeURIComponent(offer.sdp))), type: offer.type, callMode: mode }, 'offer');
     } catch (error) {
       console.warn('WebRTC setup failed', error);
       window.alert("Votre navigateur bloque l'accès au microphone.");
@@ -861,6 +873,7 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
       {user && <div>
         <div className="min-h-screen bg-cream-base dark:bg-charcoal-dark text-slate-800 dark:text-cream-base flex flex-col md:flex-row transition-colors duration-300">
           <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
+          <audio ref={ringtoneRef} src="https://cdn.pixabay.com/download/audio/2022/03/10/audio_a30f7e4f88.mp3" loop className="hidden"/>
 
           {/* ══════════════════════════════════════════════════════════════════
               ÉCRAN D'APPEL ENTRANT (affiché partout dans l'app)
