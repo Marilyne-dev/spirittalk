@@ -141,7 +141,8 @@ export default function App() {
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const incomingCallRef = useRef<{ peerId: string; mode: 'audio' | 'video'; signal: any } | null>(null);
   const ringtoneRef = useRef<HTMLAudioElement | null>(null);
-
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
 
   const [posts, setPosts] = useState<CommunityPost[]>(() => {
     const saved = localStorage.getItem('spirittalk_posts');
@@ -281,6 +282,7 @@ export default function App() {
 
   try {
     localStreamRef.current = stream;
+    if (localVideoRef.current) localVideoRef.current.srcObject = stream;
     const pc = new RTCPeerConnection({ 
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
@@ -295,12 +297,12 @@ export default function App() {
         void apiService.sendCallSignal(peerId, event.candidate.toJSON(), 'ice-candidate');
       }
     };
-    pc.ontrack = (event) => {
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = event.streams[0];
-        void remoteAudioRef.current.play().catch(() => undefined);
-      }
-    };
+   pc.ontrack = (event) => {
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = event.streams[0];
+      void remoteVideoRef.current.play().catch(() => undefined);
+    }
+  };
 
     const decodedSdp = decodeURIComponent(escape(atob(signal.sdp)));
     const sessionDesc = new RTCSessionDescription({ type: signal.type, sdp: decodedSdp });
@@ -771,6 +773,7 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
         return await navigator.mediaDevices.getUserMedia({ audio: true });
       });
       localStreamRef.current = stream;
+      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
       const pc = new RTCPeerConnection({ iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] });
       peerConnectionRef.current = pc;
       stream.getTracks().forEach(track => pc.addTrack(track, stream));
@@ -872,8 +875,8 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
 
       {user && <div>
         <div className="min-h-screen bg-cream-base dark:bg-charcoal-dark text-slate-800 dark:text-cream-base flex flex-col md:flex-row transition-colors duration-300">
-          <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
-          <audio ref={ringtoneRef} src="https://cdn.pixabay.com/download/audio/2022/03/10/audio_a30f7e4f88.mp3" loop className="hidden"/>
+          
+          <audio ref={ringtoneRef} src="/ringtone.aac" loop className="hidden"/>
 
           {/* ══════════════════════════════════════════════════════════════════
               ÉCRAN D'APPEL ENTRANT (affiché partout dans l'app)
@@ -938,6 +941,50 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
               </div>
             </div>
           )}
+
+          {activeCall && (
+                <div className="fixed inset-0 z-[998] flex flex-col items-center justify-center bg-black text-white">
+                  {activeCall.mode === 'video' ? (
+                    <>
+                      <video
+                        ref={remoteVideoRef}
+                        autoPlay
+                        playsInline
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                      <video
+                        ref={localVideoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="absolute bottom-24 right-4 w-28 h-40 rounded-xl object-cover border-2 border-white/40 shadow-lg z-10"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      {/* l'audio distant doit quand même jouer en mode audio */}
+                      <video ref={remoteVideoRef} autoPlay playsInline className="hidden" />
+                      <div className="w-28 h-28 rounded-full bg-emerald-medium/20 flex items-center justify-center mb-6">
+                        <Phone className="w-10 h-10 text-emerald-medium" />
+                      </div>
+                    </>
+                  )}
+
+                  <div className="relative z-10 mt-4 text-center bg-black/40 px-6 py-3 rounded-2xl backdrop-blur-sm">
+                    <p className="font-serif text-lg font-bold">
+                      {friends.find(f => f.id === activeCall.peerId)?.name || 'En communication'}
+                    </p>
+                    <p className="text-xs text-white/70">En communication</p>
+                  </div>
+
+                  <button
+                    onClick={handleEndCall}
+                    className="relative z-10 mt-8 p-5 rounded-full bg-red-500 hover:bg-red-600 active:scale-95 transition-all shadow-xl"
+                  >
+                    <PhoneOff className="w-7 h-7" />
+                  </button>
+                </div>
+              )}
 
           {/* Sidebar Desktop */}
           <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-20 flex-col items-center py-6 gap-8 border-r border-cream-darker dark:border-charcoal-light/10 bg-white/70 dark:bg-charcoal-card/70 backdrop-blur-md z-40">

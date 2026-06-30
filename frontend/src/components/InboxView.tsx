@@ -249,7 +249,7 @@ useEffect(() => {
       {/* ══════════════════════════════════════════════════════════════════
           OVERLAY APPEL SORTANT
       ══════════════════════════════════════════════════════════════════ */}
-      {outgoingCall && outgoingFriend && (
+      {outgoingCall && outgoingFriend && !callIsActive && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md">
           <div className="text-center text-white space-y-8 px-8 w-full max-w-md">
 
