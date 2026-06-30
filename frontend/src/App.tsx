@@ -1,6 +1,6 @@
 import React, { useCallback, useState, useEffect, useRef, startTransition } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { Home, Sparkles, Search, User, Award, Moon, Sun, Bell, MessageSquare, Users, MessageCircle, Phone, PhoneOff } from 'lucide-react';
+import { Home, Sparkles, Search, User, Award, Moon, Sun, Bell, MessageSquare, Users, MessageCircle, Phone, PhoneOff, Play } from 'lucide-react';
 import { ChatMessage, Bookmark, Note, InspirationCard, Religion, CommunityPost, Friend, DirectMessage, SpiritNotification } from './types';
 import HomeView from './components/HomeView';
 import ChatView from './components/ChatView';
@@ -8,6 +8,7 @@ import SearchView from './components/SearchView';
 import ProfileView from './components/ProfileView';
 import CommunityView from './components/CommunityView';
 import InboxView from './components/InboxView';
+import VideoView from './components/Videoview';
 import QuizModal from './components/QuizModal';
 import InspirationModal from './components/InspirationModal';
 import AuthView from './components/AuthView';
@@ -123,12 +124,14 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
-  const [currentTab, setCurrentTab] = useState<'home' | 'community' | 'inbox' | 'chat' | 'search' | 'profile'>('home');
+  const [currentTab, setCurrentTab] = useState<'home' | 'community' | 'inbox' | 'chat' | 'search' | 'profile' | 'videos'>('home');
   const [darkMode, setDarkMode] = useState<boolean>(false);
 
   // ── APPELS : états partagés App ──────────────────────────────────────────
   const [activeCall, setActiveCall] = useState<{ peerId: string; mode: 'audio' | 'video' } | null>(null);
   const [callConnected, setCallConnected] = useState(false);
+
+  // ── Flux média pour l'affichage caméra locale / distante ─────────────────
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const callDurationRef = useRef(0);
@@ -136,8 +139,8 @@ export default function App() {
   // FIX : incomingCall est l'interface qui s'affiche chez le DESTINATAIRE
   const [incomingCall, setIncomingCall] = useState<{ peerId: string; mode: 'audio' | 'video'; signal: any } | null>(null);
   useEffect(() => {
-  incomingCallRef.current = incomingCall;
-}, [incomingCall]);
+    incomingCallRef.current = incomingCall;
+  }, [incomingCall]);
 
   const peerConnectionRef = useRef<any>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -233,7 +236,7 @@ export default function App() {
     }).catch(() => {});
   }, [user]);
 
-  // ── Tracker la durée d'appel ───────────────────────────────────────────────
+  // ── Durée de l'appel (utilisée pour le log dans la messagerie) ────────────
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
     if (callConnected) {
@@ -249,6 +252,7 @@ export default function App() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  // ── Enregistre l'appel comme message dans la messagerie ──────────────────
   const handleLogCall = useCallback((peerId: string, mode: 'audio' | 'video', durationSec: number) => {
     const myId = String(user?.id || 'me');
     const missed = durationSec === 0;
@@ -299,7 +303,7 @@ export default function App() {
     return () => window.removeEventListener('spirittalk_call_event', handler);
   }, [handleEndCall]);
 
-// ── Marquer l'appel comme connecté (déclenche le décompte) ────────────────
+  // ── Marquer l'appel comme connecté (déclenche le décompte) ────────────────
   useEffect(() => {
     const handler = (e: any) => {
       if (e.detail?.type === 'call_accepted') setCallConnected(true);
@@ -310,81 +314,81 @@ export default function App() {
   }, []);
 
   // ── Accepter l'appel entrant ──────────────────────────────────────────────
- const handleAcceptCall = useCallback(async () => {
-  const call = incomingCallRef.current;
-  if (!call) return;
-  const { peerId, signal, mode } = call;
-  setIncomingCall(null);
-  incomingCallRef.current = null;
-  ringtoneRef.current?.pause();
-  if (ringtoneRef.current) ringtoneRef.current.currentTime = 0;
+  const handleAcceptCall = useCallback(async () => {
+    const call = incomingCallRef.current;
+    if (!call) return;
+    const { peerId, signal, mode } = call;
+    setIncomingCall(null);
+    incomingCallRef.current = null;
+    ringtoneRef.current?.pause();
+    if (ringtoneRef.current) ringtoneRef.current.currentTime = 0;
 
-  let stream: MediaStream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ 
-      audio: { echoCancellation: true, noiseSuppression: true },
-      video: mode === 'video' ? { width: 640, height: 480 } : false
-    });
-  } catch (e: any) {
-    console.error('getUserMedia error:', e.name, e.message);
-    if (e.name === 'NotAllowedError') {
-      alert("Permission microphone refusée. Autorisez le microphone dans les paramètres du navigateur.");
-    } else if (e.name === 'NotFoundError') {
-      alert("Aucun microphone détecté.");
-    } else {
-      alert("Microphone inaccessible : " + e.message);
-    }
-    return;
-  }
-
-  try {
-    localStreamRef.current = stream;
-    setLocalStream(stream);
-    if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-    const pc = new RTCPeerConnection({ 
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ] 
-    });
-    peerConnectionRef.current = pc;
-    stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
-    pc.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
-      if (event.candidate) {
-        void apiService.sendCallSignal(peerId, event.candidate.toJSON(), 'ice-candidate');
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { echoCancellation: true, noiseSuppression: true },
+        video: mode === 'video' ? { width: 640, height: 480 } : false
+      });
+    } catch (e: any) {
+      console.error('getUserMedia error:', e.name, e.message);
+      if (e.name === 'NotAllowedError') {
+        alert("Permission microphone refusée. Autorisez le microphone dans les paramètres du navigateur.");
+      } else if (e.name === 'NotFoundError') {
+        alert("Aucun microphone détecté.");
+      } else {
+        alert("Microphone inaccessible : " + e.message);
       }
-    };
-   pc.ontrack = (event) => {
-    setRemoteStream(event.streams[0]);
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = event.streams[0];
-      void remoteVideoRef.current.play().catch(() => undefined);
+      return;
     }
-  };
 
-    const decodedSdp = decodeURIComponent(escape(atob(signal.sdp)));
-    const sessionDesc = new RTCSessionDescription({ type: signal.type, sdp: decodedSdp });
-    await pc.setRemoteDescription(sessionDesc);
+    try {
+      localStreamRef.current = stream;
+      setLocalStream(stream);
+      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+      const pc = new RTCPeerConnection({ 
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ] 
+      });
+      peerConnectionRef.current = pc;
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
-    for (const candidate of pendingCandidatesRef.current) {
-      try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+      pc.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
+        if (event.candidate) {
+          void apiService.sendCallSignal(peerId, event.candidate.toJSON(), 'ice-candidate');
+        }
+      };
+      pc.ontrack = (event) => {
+        setRemoteStream(event.streams[0]);
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = event.streams[0];
+          void remoteVideoRef.current.play().catch(() => undefined);
+        }
+      };
+
+      const decodedSdp = decodeURIComponent(escape(atob(signal.sdp)));
+      const sessionDesc = new RTCSessionDescription({ type: signal.type, sdp: decodedSdp });
+      await pc.setRemoteDescription(sessionDesc);
+
+      for (const candidate of pendingCandidatesRef.current) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+      }
+      pendingCandidatesRef.current = [];
+
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await apiService.sendCallSignal(peerId, { sdp: btoa(unescape(encodeURIComponent(answer.sdp))), type: answer.type }, 'answer');
+
+      currentCallRef.current = { peerId, mode };
+      setActiveCall({ peerId, mode });
+      window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'call_accepted' } }));
+    } catch (error: any) {
+      console.warn('Could not answer call', error);
+      alert("Erreur lors de la connexion : " + error.message);
+      stream.getTracks().forEach(t => t.stop());
     }
-    pendingCandidatesRef.current = [];
-
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    await apiService.sendCallSignal(peerId, { sdp: btoa(unescape(encodeURIComponent(answer.sdp))), type: answer.type }, 'answer');
-
-    currentCallRef.current = { peerId, mode };
-    setActiveCall({ peerId, mode });
-    window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'call_accepted' } }));
-  } catch (error: any) {
-    console.warn('Could not answer call', error);
-    alert("Erreur lors de la connexion : " + error.message);
-    stream.getTracks().forEach(t => t.stop());
-  }
-}, []);
+  }, []);
 
   const handleDeclineCall = useCallback(() => {
     setIncomingCall(null);
@@ -397,19 +401,13 @@ export default function App() {
     if (!user) return;
 
     const pusher = pusherService.initialize(
-      // FIX MESSAGES : on s'assure que recipientId = myId (vrai ID) et que
-      // l'état est mis à jour avec un nouveau tableau (référence différente)
-      // pour forcer le re-render d'InboxView
       (newMsg) => {
         const myId = String(user.id);
         const rawSenderId = String(newMsg.senderId);
         const rawRecipientId = String(newMsg.recipientId);
 
-        // ── FILTRE CRITIQUE : ignorer les messages qui ne me sont pas destinés ──
-        // Le canal est PUBLIC donc tout le monde reçoit tous les messages
-        // On n'accepte que : expéditeur = moi (mes propres envois sync) OU destinataire = moi
-        if (rawSenderId === myId) return;         // ignorer ses propres messages (déjà ajoutés localement)
-        if (rawRecipientId !== myId) return;      // ignorer les messages entre deux autres utilisateurs
+        if (rawSenderId === myId) return;
+        if (rawRecipientId !== myId) return;
 
         const mappedMsg: DirectMessage = {
           id: newMsg.id ? String(newMsg.id) : `dm_pusher_${rawSenderId}_${Date.now()}`,
@@ -444,54 +442,48 @@ export default function App() {
         }
       },
 
-    (friendId, isTyping, liveText?: string) => {
-            setFriends(prev => prev.map(f => f.id === String(friendId) ? { ...f, isTyping } : f));
-            if ((window as any).__inboxSetLiveTyping) {
-              (window as any).__inboxSetLiveTyping(String(friendId), liveText ?? '', isTyping);
-            }
-          },
+      (friendId, isTyping, liveText?: string) => {
+        setFriends(prev => prev.map(f => f.id === String(friendId) ? { ...f, isTyping } : f));
+        if ((window as any).__inboxSetLiveTyping) {
+          (window as any).__inboxSetLiveTyping(String(friendId), liveText ?? '', isTyping);
+        }
+      },
 
-          async (callPayload) => {
+      async (callPayload) => {
         if (!user) return;
         const myId = String(user.id);
         const peerId = String(callPayload.senderId);
         const targetId = String(callPayload.recipientId);
 
-        // ── FILTRE CRITIQUE : canal public, ignorer les signaux pas destinés à moi ──
-        if (peerId === myId) return;      // ignorer mes propres signaux
-        if (targetId !== myId) return;    // ignorer les appels entre deux autres users
+        if (peerId === myId) return;
+        if (targetId !== myId) return;
 
-        // ── OFFRE D'APPEL : montrer l'écran d'appel entrant ──
-      if (callPayload.type === 'offer') {
-      setIncomingCall({
-        peerId,
-        mode: callPayload.signal?.callMode === 'video' ? 'video' : 'audio',
-        signal: callPayload.signal
-      });
-      ringtoneRef.current?.play().catch(() => {});
-      return;
-    }
+        if (callPayload.type === 'offer') {
+          setIncomingCall({
+            peerId,
+            mode: callPayload.signal?.callMode === 'video' ? 'video' : 'audio',
+            signal: callPayload.signal
+          });
+          ringtoneRef.current?.play().catch(() => {});
+          return;
+        }
 
-        // ── RÉPONSE : côté appelant, finaliser la connexion ──
-        // APRÈS
-if (callPayload.type === 'answer' && peerConnectionRef.current) {
-  try {
-    const decodedSdp = decodeURIComponent(escape(atob(callPayload.signal.sdp)));
-    const sessionDesc = new RTCSessionDescription({ type: callPayload.signal.type, sdp: decodedSdp });
-    await peerConnectionRef.current.setRemoteDescription(sessionDesc);
-    for (const candidate of pendingCandidatesRef.current) {
-      try { await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
-    }
-    pendingCandidatesRef.current = [];
-    window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'call_accepted' } }));
-  } catch (err) {
-    console.warn('Failed to set remote description from answer', err);
-  }
-}
+        if (callPayload.type === 'answer' && peerConnectionRef.current) {
+          try {
+            const decodedSdp = decodeURIComponent(escape(atob(callPayload.signal.sdp)));
+            const sessionDesc = new RTCSessionDescription({ type: callPayload.signal.type, sdp: decodedSdp });
+            await peerConnectionRef.current.setRemoteDescription(sessionDesc);
+            for (const candidate of pendingCandidatesRef.current) {
+              try { await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+            }
+            pendingCandidatesRef.current = [];
+            window.dispatchEvent(new CustomEvent('spirittalk_call_event', { detail: { type: 'call_accepted' } }));
+          } catch (err) {
+            console.warn('Failed to set remote description from answer', err);
+          }
+        }
 
-        // ── ICE CANDIDATE ──
-      // APRÈS
-       if (callPayload.type === 'ice-candidate') {
+        if (callPayload.type === 'ice-candidate') {
           const pc = peerConnectionRef.current;
           if (pc && pc.remoteDescription) {
             try {
@@ -501,35 +493,6 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
             pendingCandidatesRef.current.push(callPayload.signal);
           }
         }
-      },
-
-      // ── Like reçu en temps réel ──────────────────────────────────────────
-      (payload) => {
-        setPosts(prev => prev.map(p =>
-          p.id === payload.postId ? { ...p, likes: payload.likes } : p
-        ));
-      },
-
-     // ── Commentaire reçu en temps réel ───────────────────────────────────
-      (payload) => {
-        setPosts(prev => prev.map(p => {
-          if (p.id !== payload.postId) return p;
-
-          // Déjà reçu (évite les doublons si l'événement arrive deux fois)
-          if (p.comments.some(c => c.id === payload.comment.id)) return p;
-
-          // Remplace le commentaire optimiste local par la version confirmée du serveur
-          const optimisticIdx = p.comments.findIndex(
-            c => c.id.startsWith('comment_local_') && c.content === payload.comment.content
-          );
-          if (optimisticIdx !== -1) {
-            const updatedComments = [...p.comments];
-            updatedComments[optimisticIdx] = payload.comment;
-            return { ...p, comments: updatedComments };
-          }
-
-          return { ...p, comments: [...p.comments, payload.comment] };
-        }));
       }
     );
 
@@ -540,32 +503,43 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
   useEffect(() => {
     if (!user) return;
     const loadMessages = async () => {
-        try {
-          const msgs = await apiService.getDirectMessages();
-          if (msgs && msgs.length > 0) {
-            const myId = String(user.id);
-            const normalized = msgs.map((m: any) => ({
-              ...m,
-              // ✅ FIX : les IDs sont maintenant de vrais strings numériques
-              // plus jamais 'me' venant du backend
-              senderId: String(m.senderId || m.sender_id),
-              recipientId: String(m.recipientId || m.recipient_id),
-            }));
-            setDirectMessages(normalized);
-          }
-        } catch {}
-      };
+      try {
+        const msgs = await apiService.getDirectMessages();
+        if (msgs && msgs.length > 0) {
+          const normalized = msgs.map((m: any) => ({
+            ...m,
+            senderId: String(m.senderId || m.sender_id),
+            recipientId: String(m.recipientId || m.recipient_id),
+          }));
+          setDirectMessages(normalized);
+        }
+      } catch {}
+    };
     loadMessages();
   }, [user]);
 
   // Charger posts backend
-useEffect(() => {
+  useEffect(() => {
     if (!user) return;
     const loadBackendInspirations = async () => {
       try {
         const data = await apiService.getInspirations();
         if (data && Array.isArray(data)) {
-          setPosts(data.map(mapInspiration));
+          const mapped = data.map((item: any) => ({
+            id: item.id.toString(),
+            name: item.user?.name || 'Anonyme',
+            username: item.user?.username || 'user',
+            avatar: item.user?.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
+            content: item.content,
+            religion: item.user?.religion || 'Mixte',
+            likes: item.likes || item.likes_count || 0,
+            likedByMe: item.is_liked || false,
+            time: new Date(item.created_at).toLocaleDateString('fr-FR'),
+            verse_reference: item.verse_reference,
+            verse_text: item.verse_text,
+            comments: item.comments || []
+          }));
+          setPosts(mapped);
         }
       } catch {}
     };
@@ -761,27 +735,6 @@ useEffect(() => {
     setUser(null);
   };
 
-const mapInspiration = (item: any): CommunityPost => ({
-  id: item.id.toString(),
-  name: item.user?.name || 'Anonyme',
-  username: item.user?.username || 'user',
-  avatar: item.user?.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
-  content: item.content,
-  religion: item.user?.religion || 'Mixte',
-  likes: item.likes || item.likes_count || 0,
-  likedByMe: item.is_liked || false,
-  time: new Date(item.created_at).toLocaleDateString('fr-FR'),
-  verse_reference: item.verse_reference,
-  verse_text: item.verse_text,
-  comments: (item.comments || []).map((c: any) => ({
-    id: String(c.id),
-    authorName: c.user?.name || 'Anonyme',
-    authorAvatar: c.user?.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
-    content: c.content,
-    time: c.created_at ? new Date(c.created_at).toLocaleDateString('fr-FR') : "À l'instant"
-  }))
-});
-
   const handleCreatePost = async (content: string, images?: string[], videoUrl?: string, verse_reference?: string, verse_text?: string) => {
     const newPost: CommunityPost = {
       id: `post_${Date.now()}`,
@@ -801,9 +754,22 @@ const mapInspiration = (item: any): CommunityPost => ({
       await apiService.createInspiration(content.trim(), verse_reference, verse_text,
         verse_reference ? (verse_reference.includes('Coran') ? 'Coran' : 'Bible') : undefined
       );
-const data = await apiService.getInspirations();
+      const data = await apiService.getInspirations();
       if (data && Array.isArray(data)) {
-        setPosts(data.map(mapInspiration));
+        setPosts(data.map((item: any) => ({
+          id: item.id.toString(),
+          name: item.user?.name || 'Anonyme',
+          username: item.user?.username || 'user',
+          avatar: item.user?.avatar || 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200',
+          content: item.content,
+          religion: item.user?.religion || 'Mixte',
+          likes: item.likes || item.likes_count || 0,
+          likedByMe: item.is_liked || false,
+          time: new Date(item.created_at).toLocaleDateString('fr-FR'),
+          verse_reference: item.verse_reference,
+          verse_text: item.verse_text,
+          comments: item.comments || []
+        })));
       }
     } catch {}
   };
@@ -816,29 +782,16 @@ const data = await apiService.getInspirations();
     try { await apiService.likeInspiration(postId); } catch {}
   };
 
-  const handleAddComment = async (postId: string, content: string) => {
-    const trimmed = content.trim();
-    if (!trimmed) return;
-
-    const optimisticComment = {
-      id: `comment_local_${Date.now()}`,
+  const handleAddComment = (postId: string, content: string) => {
+    const newComment = {
+      id: `comment_${Date.now()}`,
       authorName: user.name || 'Chercheur anonyme',
       authorAvatar: user.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200",
-      content: trimmed,
+      content,
       time: "À l'instant"
     };
-
-    // Affichage immédiat côté expéditeur, en attendant la confirmation serveur
-    setPosts(prev => prev.map(post =>
-      post.id === postId ? { ...post, comments: [...post.comments, optimisticComment] } : post
-    ));
+    setPosts(prev => prev.map(post => post.id === postId ? { ...post, comments: [...post.comments, newComment] } : post));
     handleAddXP(10);
-
-    try {
-      await apiService.addInspirationComment(postId, trimmed);
-      // La version définitive arrive via l'événement Pusher 'post-commented'
-      // et remplacera automatiquement le commentaire optimiste (voir plus bas)
-    } catch {}
   };
 
   const playPusherPing = () => {
@@ -861,20 +814,11 @@ const data = await apiService.getInspirations();
   const setupWebRtc = useCallback(async (peerId: string, mode: 'audio' | 'video' = 'audio') => {
     if (!user) return;
     try {
-      // APRÈS
       const constraints: MediaStreamConstraints = { audio: true };
-      if (mode === 'video') constraints.video = { width: { ideal: 640 }, height: { ideal: 480 } };
-
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
-      } catch (err: any) {
-        console.error('Échec caméra (appelant):', err.name, err.message);
-        if (mode === 'video') {
-          alert(`Caméra inaccessible (${err.name}). Vérifie qu'aucune autre app/onglet ne l'utilise.`);
-        }
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      }
+      if (mode === 'video') constraints.video = { width: 640, height: 480 };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints).catch(async () => {
+        return await navigator.mediaDevices.getUserMedia({ audio: true });
+      });
       localStreamRef.current = stream;
       setLocalStream(stream);
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
@@ -895,7 +839,6 @@ const data = await apiService.getInspirations();
       setActiveCall({ peerId, mode });
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      // FIX : envoyer l'offre avec type explicite pour que Pusher puisse router
       await apiService.sendCallSignal(peerId, { sdp: btoa(unescape(encodeURIComponent(offer.sdp))), type: offer.type, callMode: mode }, 'offer');
     } catch (error) {
       console.warn('WebRTC setup failed', error);
@@ -905,7 +848,6 @@ const data = await apiService.getInspirations();
 
   const handleStartCall = useCallback(async (friendId: string, mode: 'audio' | 'video' = 'audio') => {
     pendingCallRef.current = { peerId: friendId, mode };
-    // ✅ FIX : délai de 500ms pour laisser Pusher s'abonner côté destinataire
     await new Promise(resolve => setTimeout(resolve, 500));
     await setupWebRtc(friendId, mode);
   }, [setupWebRtc]);
@@ -941,7 +883,7 @@ const data = await apiService.getInspirations();
     const timestampStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const newMsg: DirectMessage = {
       id: newMsgId,
-      senderId: myId,       // FIX : utiliser le vrai ID pour que le filtre fonctionne
+      senderId: myId,
       recipientId,
       text, timestamp: timestampStr, images, audioUrl, audioDuration, readAt: null
     };
@@ -961,7 +903,6 @@ const data = await apiService.getInspirations();
     setTimeout(() => setFriends(prev => prev.map(f => f.id === recipientId ? { ...f, isTyping: false } : f)), 2000);
   };
 
-  // Infos appelant pour l'écran d'appel entrant
   const callerName = incomingCall
     ? (friends.find(f => f.id === incomingCall.peerId)?.name || 'Appel entrant')
     : '';
@@ -983,28 +924,18 @@ const data = await apiService.getInspirations();
           
           <audio ref={ringtoneRef} src="/ringtone.mp3" loop className="hidden"/>
 
-          {/* ══════════════════════════════════════════════════════════════════
-              ÉCRAN D'APPEL ENTRANT (affiché partout dans l'app)
-              FIX : cet overlay est dans App.tsx donc visible peu importe
-              l'onglet actif, et incomingCall est mis à jour par Pusher
-          ══════════════════════════════════════════════════════════════════ */}
+          {/* Écran d'appel entrant */}
           {incomingCall && (
             <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/70 backdrop-blur-sm">
               <div className="bg-white dark:bg-charcoal-dark rounded-3xl p-8 text-center shadow-2xl space-y-6 max-w-xs w-full mx-4 border border-emerald-medium/20 animate-fade-in">
-                {/* Avatar + animation de sonnerie */}
                 <div className="relative mx-auto w-24 h-24">
                   {callerAvatar ? (
-                    <img
-                      src={callerAvatar}
-                      alt={callerName}
-                      className="w-24 h-24 rounded-full object-cover border-4 border-emerald-medium/40"
-                    />
+                    <img src={callerAvatar} alt={callerName} className="w-24 h-24 rounded-full object-cover border-4 border-emerald-medium/40" />
                   ) : (
                     <div className="w-24 h-24 rounded-full bg-emerald-medium/10 flex items-center justify-center">
                       <Phone className="w-10 h-10 text-emerald-medium" />
                     </div>
                   )}
-                  {/* Anneaux de sonnerie animés */}
                   <span className="absolute inset-0 rounded-full border-2 border-emerald-medium/40 animate-ping" />
                   <span className="absolute inset-[-8px] rounded-full border-2 border-emerald-medium/20 animate-ping [animation-delay:0.4s]" />
                   <span className="absolute inset-[-18px] rounded-full border border-emerald-medium/10 animate-ping [animation-delay:0.8s]" />
@@ -1014,30 +945,19 @@ const data = await apiService.getInspirations();
                   <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">
                     {incomingCall.mode === 'video' ? '📹 Appel vidéo entrant' : '📞 Appel audio entrant'}
                   </p>
-                  <p className="font-serif text-2xl font-bold text-emerald-deep dark:text-cream-base">
-                    {callerName}
-                  </p>
+                  <p className="font-serif text-2xl font-bold text-emerald-deep dark:text-cream-base">{callerName}</p>
                   <p className="text-xs text-slate-400">vous appelle...</p>
                 </div>
 
-                {/* Boutons Refuser / Décrocher */}
                 <div className="flex gap-8 justify-center pt-2">
                   <div className="flex flex-col items-center gap-2">
-                    <button
-                      onClick={handleDeclineCall}
-                      className="p-5 rounded-full bg-red-500 hover:bg-red-600 text-white active:scale-95 transition-all shadow-lg"
-                      aria-label="Refuser l'appel"
-                    >
+                    <button onClick={handleDeclineCall} className="p-5 rounded-full bg-red-500 hover:bg-red-600 text-white active:scale-95 transition-all shadow-lg" aria-label="Refuser l'appel">
                       <PhoneOff className="w-7 h-7" />
                     </button>
                     <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Refuser</span>
                   </div>
                   <div className="flex flex-col items-center gap-2">
-                    <button
-                      onClick={handleAcceptCall}
-                      className="p-5 rounded-full bg-emerald-medium hover:bg-emerald-deep text-white active:scale-95 transition-all shadow-lg animate-pulse"
-                      aria-label="Décrocher l'appel"
-                    >
+                    <button onClick={handleAcceptCall} className="p-5 rounded-full bg-emerald-medium hover:bg-emerald-deep text-white active:scale-95 transition-all shadow-lg animate-pulse" aria-label="Décrocher l'appel">
                       <Phone className="w-7 h-7" />
                     </button>
                     <span className="text-[10px] text-emerald-medium font-bold uppercase tracking-wide">Décrocher</span>
@@ -1047,17 +967,17 @@ const data = await apiService.getInspirations();
             </div>
           )}
 
-         {activeCall && (
-          <CallOverlay
-            peerName={friends.find(f => f.id === activeCall.peerId)?.name || 'Communauté SpiritTalk'}
-            peerAvatar={friends.find(f => f.id === activeCall.peerId)?.avatar}
-            mode={activeCall.mode}
-            connected={callConnected}
-            localStream={localStream}
-            remoteStream={remoteStream}
-            onHangUp={handleEndCall}
-          />
-        )}
+          {activeCall && (
+            <CallOverlay
+              peerName={friends.find(f => f.id === activeCall.peerId)?.name || 'Communauté SpiritTalk'}
+              peerAvatar={friends.find(f => f.id === activeCall.peerId)?.avatar}
+              mode={activeCall.mode}
+              connected={callConnected}
+              localStream={localStream}
+              remoteStream={remoteStream}
+              onHangUp={handleEndCall}
+            />
+          )}
 
           {/* Sidebar Desktop */}
           <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-20 flex-col items-center py-6 gap-8 border-r border-cream-darker dark:border-charcoal-light/10 bg-white/70 dark:bg-charcoal-card/70 backdrop-blur-md z-40">
@@ -1071,6 +991,7 @@ const data = await apiService.getInspirations();
                 { tab: 'community', icon: <Users className="w-5 h-5" />, title: 'Communauté' },
                 { tab: 'inbox', icon: <MessageCircle className="w-5 h-5" />, title: 'Messagerie', badge: Object.values(unreadCounts).reduce((a, b) => a + b, 0) },
                 { tab: 'chat', icon: <Sparkles className="w-5 h-5" />, title: 'Guidance IA' },
+                { tab: 'videos', icon: <Play className="w-5 h-5" />, title: 'Vidéos' },
                 { tab: 'search', icon: <Search className="w-5 h-5" />, title: 'Rechercher' },
                 { tab: 'profile', icon: <User className="w-5 h-5" />, title: 'Mon Profil' },
               ].map(({ tab, icon, title, badge }) => (
@@ -1146,6 +1067,9 @@ const data = await apiService.getInspirations();
               {currentTab === 'chat' && (
                 <ChatView messages={chatMessages} onSendMessage={handleSendMessage} onBookmark={handleAddBookmark} isGenerating={isGenerating} />
               )}
+              {currentTab === 'videos' && (
+                <VideoView />
+              )}
               {currentTab === 'search' && (
                 <SearchView onBookmark={handleAddBookmark} onNavigateToChatWithQuery={handleNavigateToChatWithQuery} />
               )}
@@ -1161,8 +1085,8 @@ const data = await apiService.getInspirations();
               { tab: 'home', icon: <Home className="w-5 h-5 mb-1" />, label: 'Accueil' },
               { tab: 'community', icon: <Users className="w-5 h-5 mb-1" />, label: 'Communauté' },
               { tab: 'inbox', icon: <MessageCircle className="w-5 h-5 mb-1" />, label: 'Messages', badge: Object.values(unreadCounts).reduce((a, b) => a + b, 0) },
+              { tab: 'videos', icon: <Play className="w-5 h-5 mb-1" />, label: 'Vidéos' },
               { tab: 'chat', icon: <Sparkles className="w-5 h-5 mb-1" />, label: 'IA' },
-              { tab: 'search', icon: <Search className="w-5 h-5 mb-1" />, label: 'Étude' },
               { tab: 'profile', icon: <User className="w-5 h-5 mb-1" />, label: 'Profil' },
             ].map(({ tab, icon, label, badge }) => (
               <button
