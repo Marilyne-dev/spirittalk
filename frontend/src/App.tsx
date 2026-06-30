@@ -444,14 +444,14 @@ export default function App() {
         }
       },
 
-      (friendId, isTyping, liveText?: string) => {
-        setFriends(prev => prev.map(f => f.id === String(friendId) ? { ...f, isTyping } : f));
-        if ((window as any).__inboxSetLiveTyping) {
-          (window as any).__inboxSetLiveTyping(String(friendId), liveText ?? '', isTyping);
-        }
-      },
+    (friendId, isTyping, liveText?: string) => {
+            setFriends(prev => prev.map(f => f.id === String(friendId) ? { ...f, isTyping } : f));
+            if ((window as any).__inboxSetLiveTyping) {
+              (window as any).__inboxSetLiveTyping(String(friendId), liveText ?? '', isTyping);
+            }
+          },
 
-      async (callPayload) => {
+          async (callPayload) => {
         if (!user) return;
         const myId = String(user.id);
         const peerId = String(callPayload.senderId);
@@ -491,7 +491,7 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
 
         // ── ICE CANDIDATE ──
       // APRÈS
-        if (callPayload.type === 'ice-candidate') {
+       if (callPayload.type === 'ice-candidate') {
           const pc = peerConnectionRef.current;
           if (pc && pc.remoteDescription) {
             try {
@@ -501,6 +501,22 @@ if (callPayload.type === 'answer' && peerConnectionRef.current) {
             pendingCandidatesRef.current.push(callPayload.signal);
           }
         }
+      },
+
+      // ── Like reçu en temps réel ──────────────────────────────────────────
+      (payload) => {
+        setPosts(prev => prev.map(p =>
+          p.id === payload.postId ? { ...p, likes: payload.likes } : p
+        ));
+      },
+
+      // ── Commentaire reçu en temps réel ───────────────────────────────────
+      (payload) => {
+        setPosts(prev => prev.map(p =>
+          p.id === payload.postId
+            ? { ...p, comments: [...p.comments, payload.comment] }
+            : p
+        ));
       }
     );
 

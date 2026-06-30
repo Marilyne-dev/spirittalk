@@ -3,6 +3,7 @@ import Pusher from 'pusher-js';
 const PUSHER_KEY = (import.meta as any).env?.VITE_PUSHER_APP_KEY || (import.meta as any).env?.VITE_PUSHER_KEY || '90d62d83f3f63ace0173';
 const PUSHER_CLUSTER = (import.meta as any).env?.VITE_PUSHER_APP_CLUSTER || (import.meta as any).env?.VITE_PUSHER_CLUSTER || 'eu';
 
+
 export interface PusherMessagePayload {
   id?: string;
   senderId: string;
@@ -30,6 +31,24 @@ export interface PusherPostPayload {
   verse_text?: string;
 }
 
+
+export interface PusherLikePayload {
+  postId: string;
+  likes: number;
+}
+
+export interface PusherCommentPayload {
+  postId: string;
+  comment: {
+    id: string;
+    authorName: string;
+    authorAvatar: string;
+    content: string;
+    time: string;
+  };
+}
+
+
 export interface PusherCallPayload {
   senderId: number;
   recipientId: number;
@@ -38,12 +57,14 @@ export interface PusherCallPayload {
 }
 
 export const pusherService = {
-  initialize(
+initialize(
     onNewMessage: (msg: PusherMessagePayload) => void,
     onNewPost: (post: PusherPostPayload) => void,
     // 3ème arg = liveText (texte en cours de frappe, lettre par lettre)
     onFriendTyping: (friendId: string, isTyping: boolean, liveText?: string) => void,
-    onCallSignal?: (payload: PusherCallPayload) => void
+    onCallSignal?: (payload: PusherCallPayload) => void,
+    onPostLiked?: (payload: PusherLikePayload) => void,
+    onPostCommented?: (payload: PusherCommentPayload) => void
   ) {
     console.log('🔔 Initializing Pusher...', { key: PUSHER_KEY, cluster: PUSHER_CLUSTER });
 
@@ -71,6 +92,28 @@ export const pusherService = {
           videoUrl: data.videoUrl,
           verse_reference: data.verse_reference,
           verse_text: data.verse_text,
+        });
+      });
+
+      communityChannel.bind('post-liked', (data: any) => {
+        console.log('❤️ [Pusher] Post liked:', data);
+        onPostLiked?.({
+          postId: String(data.postId),
+          likes: data.likes,
+        });
+      });
+
+      communityChannel.bind('post-commented', (data: any) => {
+        console.log('💬 [Pusher] Post commented:', data);
+        onPostCommented?.({
+          postId: String(data.postId),
+          comment: {
+            id: String(data.comment?.id),
+            authorName: data.comment?.authorName || 'Anonyme',
+            authorAvatar: data.comment?.authorAvatar || '',
+            content: data.comment?.content || '',
+            time: data.comment?.time || "À l'instant",
+          },
         });
       });
 

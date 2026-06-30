@@ -4,10 +4,23 @@ namespace App\Http\Controllers;
 
 use App\Models\Inspiration;
 use Illuminate\Http\Request;
+use Pusher\Pusher;
 
 class InspirationController extends Controller {
+
+    private function pusher(): Pusher {
+        return new Pusher(
+            env('PUSHER_APP_KEY'),
+            env('PUSHER_APP_SECRET'),
+            env('PUSHER_APP_ID'),
+            [
+                'cluster' => env('PUSHER_APP_CLUSTER', 'eu'),
+                'useTLS' => true,
+            ]
+        );
+    }
+
     public function index() {
-        // Charge toutes les inspirations publiques avec les détails de l'utilisateur qui l'a créée
         $inspirations = Inspiration::with(['user', 'comments.user'])
             ->where('is_public', true)
             ->orderBy('created_at', 'desc')
@@ -28,18 +41,48 @@ class InspirationController extends Controller {
         ]);
 
         $inspiration = $request->user()->inspirations()->create($request->all());
+        $inspiration->load(['user', 'comments.user']);
 
-        // Bonus d'XP pour le partage d'une inspiration
         $user = $request->user();
         $user->increment('xp_points', 30);
 
-        return response()->json(Inspiration::with(['user', 'comments.user'])->find($inspiration->id), 201);
+        // ── Diffusion temps réel du nouveau post ─────────────────────────
+        try {
+            $this->pusher()->trigger('spirittalk-community', 'new-post', [
+                'id' => (string) $inspiration->id,
+                'name' => $inspiration->user->name ?? 'Anonyme',
+                'username' => $inspiration->user->username ?? 'user',
+                'avatar' => $inspiration->user->avatar ?? null,
+                'content' => $inspiration->content,
+                'religion' => $inspiration->user->religion ?? 'Mixte',
+                'likes' => 0,
+                'time' => $inspiration->created_at->translatedFormat('d M Y'),
+                'images' => $inspiration->images,
+                'videoUrl' => $inspiration->video_url,
+                'verse_reference' => $inspiration->verse_reference,
+                'verse_text' => $inspiration->verse_text,
+            ]);
+        } catch (\Exception $e) {
+            \Log::warning('Pusher broadcast (new-post) failed: ' . $e->getMessage());
+        }
+
+        return response()->json($inspiration, 201);
     }
 
     public function like($id) {
         $inspiration = Inspiration::findOrFail($id);
         $inspiration->increment('likes');
-        
+
+        // ── Diffusion temps réel du like ──────────────────────────────────
+        try {
+            $this->pusher()->trigger('spirittalk-community', 'post-liked', [
+                'postId' => (string) $inspiration->id,
+                'likes' => $inspiration->likes,
+            ]);
+        } catch (\Exception $e) {
+            \Log::warning('Pusher broadcast (post-liked) failed: ' . $e->getMessage());
+        }
+
         return response()->json([
             'id' => $inspiration->id,
             'likes' => $inspiration->likes
@@ -56,7 +99,24 @@ class InspirationController extends Controller {
             'user_id' => $request->user()->id,
             'content' => $fields['content'],
         ]);
+        $comment->load('user');
 
-        return response()->json($comment->load('user'), 201);
+        // ── Diffusion temps réel du commentaire ───────────────────────────
+        try {
+            $this->pusher()->trigger('spirittalk-community', 'post-commented', [
+                'postId' => (string) $inspiration->id,
+                'comment' => [
+                    'id' => (string) $comment->id,
+                    'authorName' => $comment->user->name ?? 'Anonyme',
+                    'authorAvatar' => $comment->user->avatar ?? null,
+                    'content' => $comment->content,
+                    'time' => "À l'instant",
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::warning('Pusher broadcast (post-commented) failed: ' . $e->getMessage());
+        }
+
+        return response()->json($comment, 201);
     }
 }

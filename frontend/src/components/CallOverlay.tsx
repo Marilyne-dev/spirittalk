@@ -36,31 +36,56 @@ export default function CallOverlay({
 }: CallOverlayProps) {
   const [duration, setDuration] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
 
-useEffect(() => {
-  if (localVideoRef.current && localStream) {
-    localVideoRef.current.srcObject = localStream;
-    console.log('Local stream tracks:', localStream.getVideoTracks().map(t => ({ enabled: t.enabled, readyState: t.readyState })));
-  }
-}, [localStream]);
+  // ── Attache le flux local à la balise <video>, qu'elle soit déjà montée
+  // ou que le flux arrive après coup. Couvre les deux ordres d'arrivée
+  // possibles (corrige le cas où l'appelé ne se voit pas lui-même). ──────────
+  const attachLocalStream = (stream: MediaStream | null) => {
+    const video = localVideoRef.current;
+    if (!video || !stream) return;
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
+    video.play().catch(() => {});
+  };
 
- useEffect(() => {
-  if (remoteVideoRef.current && remoteStream) {
+  // ── Idem côté distant. Corrige le cas où l'appelant ne voit pas
+  // son interlocuteur si le track arrive avant le montage du composant. ─────
+  const attachRemoteStream = (stream: MediaStream | null) => {
     const video = remoteVideoRef.current;
-    video.srcObject = remoteStream;
+    if (!video || !stream) return;
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
     video.muted = true; // nécessaire pour que l'autoplay soit autorisé
     video.play()
       .then(() => {
-        // une fois la lecture lancée, on réactive le son
         video.muted = false;
       })
       .catch((err) => {
         console.warn('Lecture vidéo distante bloquée :', err.name, err.message);
       });
-  }
-}, [remoteStream]);
+  };
+
+  const setLocalVideoRef = (el: HTMLVideoElement | null) => {
+    localVideoRef.current = el;
+    if (el) attachLocalStream(localStream);
+  };
+
+  const setRemoteVideoRef = (el: HTMLVideoElement | null) => {
+    remoteVideoRef.current = el;
+    if (el) attachRemoteStream(remoteStream);
+  };
+
+  useEffect(() => {
+    attachLocalStream(localStream);
+  }, [localStream]);
+
+  useEffect(() => {
+    attachRemoteStream(remoteStream);
+  }, [remoteStream]);
 
   // ── Décompte : démarre uniquement une fois la connexion établie ──────────
   useEffect(() => {
@@ -83,7 +108,7 @@ useEffect(() => {
       {/* ── Fond ──────────────────────────────────────────────────────────── */}
       {mode === 'video' ? (
         <video
-          ref={remoteVideoRef}
+          ref={setRemoteVideoRef}
           autoPlay
           playsInline
           className="absolute inset-0 w-full h-full object-cover bg-charcoal-dark"
@@ -91,7 +116,7 @@ useEffect(() => {
       ) : (
         <>
           {/* L'audio distant doit quand même être lu, même invisible */}
-          <video ref={remoteVideoRef} autoPlay playsInline className="hidden" />
+          <video ref={setRemoteVideoRef} autoPlay playsInline className="hidden" />
           <div
             className="absolute inset-0 bg-cover bg-center scale-105"
             style={{
@@ -106,7 +131,7 @@ useEffect(() => {
       {/* ── Caméra locale (mode vidéo uniquement) ───────────────────────────── */}
       {mode === 'video' && (
         <video
-          ref={localVideoRef}
+          ref={setLocalVideoRef}
           autoPlay
           playsInline
           muted
