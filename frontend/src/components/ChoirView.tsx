@@ -1,870 +1,861 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  Music, Plus, Search, Upload, Mic, MicOff, Play, Pause,
-  Download, BookOpen, Image, FileText, ChevronRight, X,
-  Users, Star, CheckCircle, AlertCircle, Loader2, Square
+  Music, Plus, Search, ChevronLeft, Upload, Mic, MicOff,
+  Play, Pause, BookOpen, Users, Cross, Star, X, Check,
+  Filter, Headphones, Clock, Hash
 } from 'lucide-react';
-import { apiService } from '../services/api';
 
-// ── Types ────────────────────────────────────────────────────────────────
-type Courant = 'catholique' | 'evangelique';
-type TypeGroupe = 'chorale' | 'groupe_priere' | 'mouvement';
-type TypeContenu = 'audio' | 'texte' | 'image' | 'priere';
-
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
 interface Chorale {
   id: string;
-  nom: string;
-  courant: Courant;
-  type: TypeGroupe;
-  langue: string;
-  categorie: string;
-  logo_url: string;
+  name: string;
+  type: 'en_langue' | 'jeunesse' | 'groupe_priere';
+  denomination: 'catholique' | 'evangelique';
+  church: string;
+  city: string;
+  logo_url?: string;
   description?: string;
-  ville?: string;
-  chansons_count?: number;
-  user?: { name: string; avatar: string };
+  admin_user_id?: string;
+  is_verified?: boolean;
+  songs_count?: number;
 }
 
-interface Chanson {
+interface Song {
   id: string;
-  titre: string;
-  psaume?: string;
-  type_contenu: TypeContenu;
+  choir_id: string;
+  name: string;
+  psalm_number?: number;
   audio_url?: string;
-  image_url?: string;
-  texte?: string;
-  format_fichier?: string;
-  duree?: string;
-  ecoute_count: number;
-  telecharge_count: number;
+  lyrics_text?: string;
+  lyrics_image_url?: string;
+  language?: string;
+  uploaded_by?: string;
+  duration?: string;
 }
 
-const API = ((import.meta as any).env?.VITE_API_URL || 'https://marilyne.alwaysdata.net/spirittalk').replace(/\/$/, '');
-const token = () => {
-  try { return JSON.parse(localStorage.getItem('spirittalk_user') || '{}')?.token || ''; } catch { return ''; }
+interface ChoirViewProps {
+  user: any;
+}
+
+const API_BASE = ((import.meta as any).env?.VITE_API_URL || 'https://marilyne.alwaysdata.net/spirittalk').replace(/\/$/, '');
+
+const getHeaders = () => {
+  const token = localStorage.getItem('spirittalk_token');
+  const h: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
+  if (token) h['Authorization'] = `Bearer ${token}`;
+  return h;
 };
 
-const apiHeaders = () => ({
-  'Authorization': `Bearer ${token()}`,
-});
+// Chorales catholiques pré-enregistrées (seeds)
+const CATHOLIC_SEEDS: Omit<Chorale, 'id'>[] = [
+  { name: 'Hanyé', type: 'en_langue', denomination: 'catholique', church: 'Paroisse', city: 'Bénin', logo_url: '', description: 'Chorale en langue Hanyé' },
+  { name: 'Sexweyon', type: 'en_langue', denomination: 'catholique', church: 'Paroisse', city: 'Bénin', logo_url: '', description: 'Chorale en langue Sexweyon' },
+  { name: 'Adjogan', type: 'en_langue', denomination: 'catholique', church: 'Paroisse', city: 'Bénin', logo_url: '', description: 'Chorale en langue Adjogan' },
+  { name: 'Arigbo', type: 'en_langue', denomination: 'catholique', church: 'Paroisse', city: 'Bénin', logo_url: '', description: 'Chorale en langue Arigbo' },
+  { name: 'Cécilienne', type: 'en_langue', denomination: 'catholique', church: 'Paroisse', city: 'Bénin', logo_url: '', description: 'Chorale Cécilienne' },
+  { name: 'Aluwasio', type: 'en_langue', denomination: 'catholique', church: 'Paroisse', city: 'Bénin', logo_url: '', description: 'Chorale Aluwasio' },
+  { name: 'Chorale des Jeunes', type: 'en_langue', denomination: 'catholique', church: 'Paroisse', city: 'Bénin', logo_url: '', description: 'Chorale des Jeunes en langue' },
+  { name: 'MADEB', type: 'jeunesse', denomination: 'catholique', church: 'Paroisse', city: 'Bénin', logo_url: '', description: 'Mouvement MADEB' },
+  { name: 'Chorale des Enfants', type: 'jeunesse', denomination: 'catholique', church: 'Paroisse', city: 'Bénin', logo_url: '', description: 'Chorale des Enfants' },
+  { name: 'Maman Chérie', type: 'jeunesse', denomination: 'catholique', church: 'Paroisse', city: 'Bénin', logo_url: '', description: 'Maman Chérie' },
+  { name: 'Sainte Face', type: 'groupe_priere', denomination: 'catholique', church: 'Paroisse', city: 'Bénin', logo_url: '', description: 'Groupe de prière Sainte Face' },
+  { name: 'Saint Michel', type: 'groupe_priere', denomination: 'catholique', church: 'Paroisse', city: 'Bénin', logo_url: '', description: 'Groupe de prière Saint Michel' },
+];
 
-// Tous les formats audio acceptés
-const AUDIO_ACCEPT = '.mp3,.wav,.aac,.ogg,.flac,.m4a,.wma,.opus,.amr,.aiff,.ape,.mp4,.3gp';
-const IMAGE_ACCEPT = '.jpg,.jpeg,.png,.webp,.pdf';
+const TYPE_LABELS: Record<string, string> = {
+  en_langue: '🎵 En langue',
+  jeunesse: '🌟 Jeunesse',
+  groupe_priere: '🙏 Groupe de prière',
+};
 
-// ── Composant principal ──────────────────────────────────────────────────
-export default function ChoirView({ user }: { user: any }) {
-  const [courant, setCourant] = useState<Courant>('catholique');
-  const [chorales, setChorales] = useState<Chorale[]>([]);
-  const [selectedChorale, setSelectedChorale] = useState<Chorale | null>(null);
-  const [chansons, setChansons] = useState<Chanson[]>([]);
-  const [search, setSearch] = useState('');
-  const [searchPsaume, setSearchPsaume] = useState('');
+const TYPE_COLORS: Record<string, string> = {
+  en_langue: 'bg-emerald-medium/10 text-emerald-deep dark:text-emerald-fixed border-emerald-medium/20',
+  jeunesse: 'bg-gold-bright/10 text-gold-deep dark:text-gold-bright border-gold-muted/20',
+  groupe_priere: 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300/20',
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Composant magnétophone audio
+// ─────────────────────────────────────────────────────────────────────────────
+function AudioRecorder({ onAudioReady }: { onAudioReady: (base64: string, duration: string) => void }) {
+  const [recording, setRecording] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const mrRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const secRef = useRef(0);
+
+  const start = async () => {
+    chunksRef.current = [];
+    secRef.current = 0;
+    setSeconds(0);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      mrRef.current = mr;
+      mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mr.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const dur = `${Math.floor(secRef.current / 60)}:${(secRef.current % 60).toString().padStart(2, '0')}`;
+          onAudioReady(reader.result as string, dur);
+        };
+        reader.readAsDataURL(blob);
+      };
+      mr.start();
+      setRecording(true);
+      timerRef.current = setInterval(() => {
+        secRef.current++;
+        setSeconds(s => s + 1);
+      }, 1000);
+    } catch {
+      alert('Microphone inaccessible');
+    }
+  };
+
+  const stop = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    mrRef.current?.stop();
+    setRecording(false);
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      {!recording ? (
+        <button type="button" onClick={start}
+          className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl text-xs font-bold hover:bg-red-600 active:scale-95 transition-all">
+          <Mic className="w-4 h-4" /> Enregistrer
+        </button>
+      ) : (
+        <button type="button" onClick={stop}
+          className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-bold animate-pulse hover:bg-red-700 active:scale-95 transition-all">
+          <MicOff className="w-4 h-4" /> Arrêter ({seconds}s)
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Modal Ajout Chanson / Prière
+// ─────────────────────────────────────────────────────────────────────────────
+function AddContentModal({ chorale, onClose, onAdded }: {
+  chorale: Chorale;
+  onClose: () => void;
+  onAdded: (song: Song) => void;
+}) {
+  const isPrayer = chorale.type === 'groupe_priere';
+  const [name, setName] = useState('');
+  const [psalmNum, setPsalmNum] = useState('');
+  const [lyricsText, setLyricsText] = useState('');
+  const [language, setLanguage] = useState('Français');
+  const [audioBase64, setAudioBase64] = useState('');
+  const [audioDuration, setAudioDuration] = useState('');
+  const [lyricsImageBase64, setLyricsImageBase64] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showCreateChorale, setShowCreateChorale] = useState(false);
-  const [showAddChanson, setShowAddChanson] = useState(false);
+  const [audioPreview, setAudioPreview] = useState('');
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAudioBase64(reader.result as string);
+      setAudioPreview(URL.createObjectURL(file));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setLyricsImageBase64(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return alert('Donnez un nom');
+    setLoading(true);
+    try {
+      // Upload audio si présent
+      let audioUrl = '';
+      if (audioBase64) {
+        const res = await fetch(`${API_BASE}/upload-audio`, {
+          method: 'POST', headers: getHeaders(),
+          body: JSON.stringify({ audio: audioBase64 })
+        });
+        if (res.ok) { const d = await res.json(); audioUrl = d.url || ''; }
+      }
+      // Upload image paroles si présente
+      let lyricsImageUrl = '';
+      if (lyricsImageBase64) {
+        const res = await fetch(`${API_BASE}/upload-audio`, {
+          method: 'POST', headers: getHeaders(),
+          body: JSON.stringify({ audio: lyricsImageBase64 })
+        });
+        if (res.ok) { const d = await res.json(); lyricsImageUrl = d.url || ''; }
+      }
+      const body = {
+        choir_id: chorale.id,
+        name: name.trim(),
+        psalm_number: psalmNum ? parseInt(psalmNum) : null,
+        audio_url: audioUrl || null,
+        lyrics_text: lyricsText || null,
+        lyrics_image_url: lyricsImageUrl || null,
+        language,
+        duration: audioDuration || null,
+      };
+      const res = await fetch(`${API_BASE}/chansons`, {
+        method: 'POST', headers: getHeaders(), body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error('Erreur serveur');
+      const saved = await res.json();
+      onAdded({ ...saved, id: String(saved.id) });
+      onClose();
+    } catch {
+      alert('Erreur lors de l\'enregistrement. Veuillez réessayer.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-charcoal-dark rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto border border-cream-darker dark:border-charcoal-light/10">
+        <div className="sticky top-0 bg-white dark:bg-charcoal-dark p-5 border-b border-cream-darker dark:border-charcoal-light/10 flex justify-between items-center rounded-t-3xl">
+          <h3 className="font-serif text-base font-bold text-emerald-deep dark:text-cream-base">
+            {isPrayer ? '🙏 Ajouter une prière' : '🎵 Ajouter une chanson'}
+          </h3>
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-cream-darker dark:hover:bg-charcoal-light/20 text-slate-400">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+              {isPrayer ? 'Titre de la prière *' : 'Nom de la chanson *'}
+            </label>
+            <input value={name} onChange={e => setName(e.target.value)} required
+              className="mt-1 w-full border border-cream-darker dark:border-charcoal-light/20 rounded-xl px-4 py-2.5 text-sm bg-slate-50 dark:bg-charcoal-card outline-none focus:border-emerald-medium"
+              placeholder={isPrayer ? 'Ex: Notre Père, Salve Regina...' : 'Ex: Alléluia, Kyrie...'}
+            />
+          </div>
+
+          {!isPrayer && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Psaume associé</label>
+                <input value={psalmNum} onChange={e => setPsalmNum(e.target.value)} type="number" min="1" max="150"
+                  className="mt-1 w-full border border-cream-darker dark:border-charcoal-light/20 rounded-xl px-4 py-2.5 text-sm bg-slate-50 dark:bg-charcoal-card outline-none focus:border-emerald-medium"
+                  placeholder="Ex: 23"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Langue</label>
+                <select value={language} onChange={e => setLanguage(e.target.value)}
+                  className="mt-1 w-full border border-cream-darker dark:border-charcoal-light/20 rounded-xl px-4 py-2.5 text-sm bg-slate-50 dark:bg-charcoal-card outline-none focus:border-emerald-medium">
+                  {['Français', 'Fon', 'Yoruba', 'Goun', 'Adja', 'Bariba', 'Latin', 'Autre'].map(l => <option key={l}>{l}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* Audio */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Audio</label>
+            <div className="flex flex-col gap-2 p-3 bg-slate-50 dark:bg-charcoal-card rounded-xl border border-cream-darker dark:border-charcoal-light/10">
+              <p className="text-[10px] text-slate-400">Enregistrer avec le micro :</p>
+              <AudioRecorder onAudioReady={(b64, dur) => { setAudioBase64(b64); setAudioDuration(dur); }} />
+              <p className="text-[10px] text-slate-400 mt-1">Ou uploader un fichier audio :</p>
+              <label className="cursor-pointer flex items-center gap-2 px-4 py-2 border border-dashed border-emerald-medium/30 rounded-xl text-xs text-emerald-medium hover:bg-emerald-medium/5 transition-colors">
+                <Upload className="w-4 h-4" />
+                <span>Choisir un fichier audio (MP3, M4A, OGG...)</span>
+                <input type="file" accept="audio/*" onChange={handleFileUpload} className="hidden" />
+              </label>
+              {(audioBase64 || audioPreview) && (
+                <div className="flex items-center gap-2 text-[10px] text-emerald-medium font-bold">
+                  <Check className="w-3 h-3" /> Audio prêt {audioDuration && `(${audioDuration})`}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Paroles texte */}
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+              {isPrayer ? 'Texte de la prière' : 'Paroles (texte)'}
+            </label>
+            <textarea value={lyricsText} onChange={e => setLyricsText(e.target.value)} rows={4}
+              className="mt-1 w-full border border-cream-darker dark:border-charcoal-light/20 rounded-xl px-4 py-2.5 text-sm bg-slate-50 dark:bg-charcoal-card outline-none focus:border-emerald-medium resize-none"
+              placeholder="Tapez les paroles ici..."
+            />
+          </div>
+
+          {/* Image paroles */}
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+              {isPrayer ? 'Image / capture de la prière' : 'Image des paroles'}
+            </label>
+            <label className="mt-1 cursor-pointer flex items-center gap-2 px-4 py-2 border border-dashed border-slate-300 dark:border-charcoal-light/20 rounded-xl text-xs text-slate-500 hover:bg-slate-50 dark:hover:bg-charcoal-card transition-colors">
+              <Upload className="w-4 h-4" />
+              <span>Uploader une image</span>
+              <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+            </label>
+            {lyricsImageBase64 && (
+              <img src={lyricsImageBase64} className="mt-2 max-h-32 rounded-lg object-contain" alt="aperçu" />
+            )}
+          </div>
+
+          <button type="submit" disabled={loading}
+            className="w-full py-3 bg-emerald-medium hover:bg-emerald-deep text-white font-bold rounded-xl active:scale-95 transition-all disabled:opacity-50 text-sm">
+            {loading ? 'Enregistrement...' : (isPrayer ? 'Ajouter la prière' : 'Ajouter la chanson')}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Modal Création Chorale
+// ─────────────────────────────────────────────────────────────────────────────
+function CreateChoirModal({ denomination, onClose, onCreated }: {
+  denomination: 'catholique' | 'evangelique';
+  onClose: () => void;
+  onCreated: (c: Chorale) => void;
+}) {
+  const [name, setName] = useState('');
+  const [type, setType] = useState<'en_langue' | 'jeunesse' | 'groupe_priere'>('en_langue');
+  const [church, setChurch] = useState('');
+  const [city, setCity] = useState('');
+  const [description, setDescription] = useState('');
+  const [logoBase64, setLogoBase64] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setLogoBase64(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!logoBase64) return alert('Le logo officiel est obligatoire pour créer un groupe.');
+    if (!name.trim() || !church.trim() || !city.trim()) return alert('Remplissez tous les champs obligatoires.');
+    setLoading(true);
+    try {
+      let logoUrl = '';
+      const res = await fetch(`${API_BASE}/upload-audio`, {
+        method: 'POST', headers: getHeaders(),
+        body: JSON.stringify({ audio: logoBase64 })
+      });
+      if (res.ok) { const d = await res.json(); logoUrl = d.url || logoBase64; }
+
+      const body = { name, type, denomination, church, city, description, logo_url: logoUrl };
+      const r = await fetch(`${API_BASE}/chorales`, {
+        method: 'POST', headers: getHeaders(), body: JSON.stringify(body)
+      });
+      if (!r.ok) throw new Error('Erreur serveur');
+      const saved = await r.json();
+      onCreated({ ...saved, id: String(saved.id) });
+      onClose();
+    } catch {
+      alert('Erreur lors de la création. Réessayez.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-charcoal-dark rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto border border-cream-darker dark:border-charcoal-light/10">
+        <div className="sticky top-0 bg-white dark:bg-charcoal-dark p-5 border-b border-cream-darker dark:border-charcoal-light/10 flex justify-between items-center rounded-t-3xl">
+          <h3 className="font-serif text-base font-bold text-emerald-deep dark:text-cream-base">
+            Créer une chorale / groupe
+          </h3>
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-cream-darker dark:hover:bg-charcoal-light/20 text-slate-400">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {/* Logo obligatoire */}
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+              Logo officiel * <span className="text-red-500">(obligatoire)</span>
+            </label>
+            <label className="mt-1 cursor-pointer flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed rounded-xl hover:bg-slate-50 dark:hover:bg-charcoal-card transition-colors border-emerald-medium/30">
+              {logoBase64 ? (
+                <img src={logoBase64} className="w-20 h-20 rounded-full object-cover" alt="logo" />
+              ) : (
+                <>
+                  <Plus className="w-8 h-8 text-emerald-medium/50" />
+                  <span className="text-xs text-slate-400">Cliquer pour uploader le logo</span>
+                </>
+              )}
+              <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+            </label>
+            <p className="text-[10px] text-slate-400 mt-1">Sans logo officiel, la création est impossible.</p>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Nom *</label>
+            <input value={name} onChange={e => setName(e.target.value)} required
+              className="mt-1 w-full border border-cream-darker dark:border-charcoal-light/20 rounded-xl px-4 py-2.5 text-sm bg-slate-50 dark:bg-charcoal-card outline-none focus:border-emerald-medium"
+              placeholder="Nom de la chorale ou du groupe"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Type</label>
+            <select value={type} onChange={e => setType(e.target.value as any)}
+              className="mt-1 w-full border border-cream-darker dark:border-charcoal-light/20 rounded-xl px-4 py-2.5 text-sm bg-slate-50 dark:bg-charcoal-card outline-none focus:border-emerald-medium">
+              <option value="en_langue">🎵 Chorale en langue</option>
+              <option value="jeunesse">🌟 Chorale jeunesse</option>
+              <option value="groupe_priere">🙏 Groupe de prière</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Église / Paroisse *</label>
+              <input value={church} onChange={e => setChurch(e.target.value)} required
+                className="mt-1 w-full border border-cream-darker dark:border-charcoal-light/20 rounded-xl px-4 py-2.5 text-sm bg-slate-50 dark:bg-charcoal-card outline-none focus:border-emerald-medium"
+                placeholder="Nom de l'église"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Ville *</label>
+              <input value={city} onChange={e => setCity(e.target.value)} required
+                className="mt-1 w-full border border-cream-darker dark:border-charcoal-light/20 rounded-xl px-4 py-2.5 text-sm bg-slate-50 dark:bg-charcoal-card outline-none focus:border-emerald-medium"
+                placeholder="Ex: Cotonou"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Description</label>
+            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2}
+              className="mt-1 w-full border border-cream-darker dark:border-charcoal-light/20 rounded-xl px-4 py-2.5 text-sm bg-slate-50 dark:bg-charcoal-card outline-none focus:border-emerald-medium resize-none"
+              placeholder="Courte description..."
+            />
+          </div>
+
+          <button type="submit" disabled={loading}
+            className="w-full py-3 bg-emerald-medium hover:bg-emerald-deep text-white font-bold rounded-xl active:scale-95 transition-all disabled:opacity-50 text-sm">
+            {loading ? 'Création en cours...' : 'Créer la chorale'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Composant principal
+// ─────────────────────────────────────────────────────────────────────────────
+export default function ChoirView({ user }: ChoirViewProps) {
+  // ── Choix dénomination (après login, pas à l'inscription) ─────────────────
+  const [denomination, setDenomination] = useState<'catholique' | 'evangelique' | null>(() => {
+    return (localStorage.getItem('spirittalk_denomination') as any) || null;
+  });
+  const [showDenomPicker, setShowDenomPicker] = useState(!denomination);
+
+  const [chorales, setChorales] = useState<Chorale[]>([]);
+  const [songs, setSongs] = useState<Song[]>([]);
+  const [selectedChorale, setSelectedChorale] = useState<Chorale | null>(null);
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [loading, setLoading] = useState(false);
+  const [showAddSong, setShowAddSong] = useState(false);
+  const [showCreateChoir, setShowCreateChoir] = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(null);
-  const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
-  const [quotaInfo, setQuotaInfo] = useState<string | null>(null);
+  const [showLyrics, setShowLyricsFor] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [tab, setTab] = useState<'catholique' | 'evangelique'>(denomination || 'catholique');
+  const [psalmSearch, setPsalmSearch] = useState('');
 
-  // Charger les chorales
-  useEffect(() => {
-    loadChorales();
-  }, [courant]);
+  // Sauvegarde du choix de dénomination
+  const chooseDenomination = (d: 'catholique' | 'evangelique') => {
+    setDenomination(d);
+    setTab(d);
+    localStorage.setItem('spirittalk_denomination', d);
+    setShowDenomPicker(false);
+  };
 
+  // ── Chargement des chorales ───────────────────────────────────────────────
   const loadChorales = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API}/api/chorales?courant=${courant}`, { headers: apiHeaders() });
-      const data = await res.json();
-      setChorales(Array.isArray(data) ? data : []);
-    } catch { setChorales([]); }
-    setLoading(false);
-  };
-
-  // Charger les chansons d'une chorale
-  const loadChansons = async (choraleId: string) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (search) params.append('search', search);
-      if (searchPsaume) params.append('psaume', searchPsaume);
-      const res = await fetch(`${API}/api/chorales/${choraleId}/chansons?${params}`, { headers: apiHeaders() });
-      const data = await res.json();
-      setChansons(Array.isArray(data) ? data : []);
-    } catch { setChansons([]); }
-    setLoading(false);
-  };
-
-  const handleSelectChorale = (c: Chorale) => {
-    setSelectedChorale(c);
-    setSearch('');
-    setSearchPsaume('');
-    loadChansons(c.id);
-  };
-
-  // Lecture audio
-  const handlePlay = (chanson: Chanson) => {
-    if (!chanson.audio_url) return;
-    if (playingId === chanson.id) {
-      audioEl?.pause();
-      setPlayingId(null);
-      return;
-    }
-    audioEl?.pause();
-    const audio = new Audio(chanson.audio_url);
-    audio.onended = () => setPlayingId(null);
-    audio.play();
-    setAudioEl(audio);
-    setPlayingId(chanson.id);
-    fetch(`${API}/api/chansons/${chanson.id}/ecouter`, { method: 'POST', headers: apiHeaders() }).catch(() => {});
-  };
-
-  // Télécharger
-  const handleDownload = async (chanson: Chanson) => {
-    setQuotaInfo(null);
-    try {
-      const res = await fetch(`${API}/api/chansons/${chanson.id}/download`, { method: 'POST', headers: apiHeaders() });
-      const data = await res.json();
-      if (res.status === 403) {
-        setQuotaInfo(data.message);
-        return;
+      const res = await fetch(`${API_BASE}/chorales`, { headers: getHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setChorales(data.map((c: any) => ({ ...c, id: String(c.id) })));
+      } else {
+        // Fallback : seeds catholiques locaux si le backend ne répond pas
+        setChorales(CATHOLIC_SEEDS.map((c, i) => ({ ...c, id: `seed_${i}` })));
       }
-      // Déclencher le téléchargement
-      const a = document.createElement('a');
-      a.href = data.url;
-      a.download = `${chanson.titre}.${data.format || 'mp3'}`;
-      a.click();
-      setQuotaInfo(`✅ Téléchargé ! Il vous reste ${data.restant} téléchargement(s) gratuit(s) aujourd'hui.`);
     } catch {
-      setQuotaInfo("Erreur lors du téléchargement.");
+      setChorales(CATHOLIC_SEEDS.map((c, i) => ({ ...c, id: `seed_${i}` })));
+    } finally {
+      setLoading(false);
     }
   };
 
-  const filteredChorales = chorales.filter(c =>
-    c.nom.toLowerCase().includes(search.toLowerCase())
-  );
+  useEffect(() => { loadChorales(); }, []);
 
+  // ── Temps réel Pusher pour chorales et chansons ───────────────────────────
+  useEffect(() => {
+    const handler = (e: any) => {
+      const { type, data } = e.detail || {};
+      if (type === 'new_chorale') {
+        setChorales(prev => {
+          if (prev.some(c => c.id === String(data.id))) return prev;
+          return [{ ...data, id: String(data.id) }, ...prev];
+        });
+      }
+      if (type === 'new_chanson') {
+        if (selectedChorale && String(data.choir_id) === String(selectedChorale.id)) {
+          setSongs(prev => {
+            if (prev.some(s => s.id === String(data.id))) return prev;
+            return [{ ...data, id: String(data.id) }, ...prev];
+          });
+        }
+      }
+    };
+    window.addEventListener('spirittalk_choir_event', handler);
+    return () => window.removeEventListener('spirittalk_choir_event', handler);
+  }, [selectedChorale]);
+
+  // ── Chargement des chansons d'une chorale ─────────────────────────────────
+  const loadSongs = async (choraleId: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/chorales/${choraleId}/chansons`, { headers: getHeaders() });
+      if (res.ok) setSongs((await res.json()).map((s: any) => ({ ...s, id: String(s.id) })));
+      else setSongs([]);
+    } catch { setSongs([]); }
+  };
+
+  const openChorale = (c: Chorale) => {
+    setSelectedChorale(c);
+    setSongs([]);
+    loadSongs(c.id);
+  };
+
+  const back = () => { setSelectedChorale(null); setSongs([]); stopAudio(); };
+
+  // ── Lecture audio ─────────────────────────────────────────────────────────
+  const playAudio = (song: Song) => {
+    if (!song.audio_url) return;
+    stopAudio();
+    const a = new Audio(song.audio_url);
+    audioRef.current = a;
+    a.play().catch(() => alert('Impossible de lire cet audio'));
+    a.onended = () => setPlayingId(null);
+    setPlayingId(song.id);
+  };
+
+  const stopAudio = () => {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    setPlayingId(null);
+  };
+
+  // ── Filtres ───────────────────────────────────────────────────────────────
+  const filteredChorales = chorales.filter(c => {
+    const matchTab = c.denomination === tab;
+    const matchSearch = !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.church.toLowerCase().includes(search.toLowerCase());
+    const matchType = typeFilter === 'all' || c.type === typeFilter;
+    return matchTab && matchSearch && matchType;
+  });
+
+  const filteredSongs = songs.filter(s => {
+    const matchSearch = !search || s.name.toLowerCase().includes(search.toLowerCase());
+    const matchPsalm = !psalmSearch || String(s.psalm_number) === psalmSearch;
+    return matchSearch && matchPsalm;
+  });
+
+  // ── Sélecteur dénomination (affiché une seule fois, stocké localement) ────
+  if (showDenomPicker) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="max-w-sm w-full text-center space-y-8 p-6">
+          <div>
+            <div className="w-16 h-16 bg-emerald-medium/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Music className="w-8 h-8 text-emerald-medium" />
+            </div>
+            <h2 className="font-serif text-2xl font-bold text-emerald-deep dark:text-cream-base">Chants Sacrés</h2>
+            <p className="text-sm text-slate-500 dark:text-cream-base/60 mt-2">
+              Choisissez votre tradition pour voir les chorales et chansons qui vous correspondent.
+            </p>
+          </div>
+          <div className="space-y-3">
+            <button onClick={() => chooseDenomination('catholique')}
+              className="w-full p-4 rounded-2xl border-2 border-emerald-medium/20 bg-emerald-medium/5 hover:bg-emerald-medium/10 hover:border-emerald-medium/40 transition-all group text-left flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-emerald-medium flex items-center justify-center text-white text-xl flex-shrink-0">✝️</div>
+              <div>
+                <p className="font-bold text-emerald-deep dark:text-cream-base text-sm">Catholique</p>
+                <p className="text-xs text-slate-400">Chorales en langue, jeunesse, groupes de prière</p>
+              </div>
+            </button>
+            <button onClick={() => chooseDenomination('evangelique')}
+              className="w-full p-4 rounded-2xl border-2 border-gold-bright/20 bg-gold-bright/5 hover:bg-gold-bright/10 hover:border-gold-bright/40 transition-all group text-left flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-gold-deep flex items-center justify-center text-white text-xl flex-shrink-0">⭐</div>
+              <div>
+                <p className="font-bold text-emerald-deep dark:text-cream-base text-sm">Évangélique</p>
+                <p className="text-xs text-slate-400">Chorales évangéliques et groupes de louange</p>
+              </div>
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-400">Vous pourrez toujours accéder aux deux traditions depuis cet espace.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Vue détail d'une chorale ──────────────────────────────────────────────
+  if (selectedChorale) {
+    const isPrayer = selectedChorale.type === 'groupe_priere';
+    return (
+      <div className="space-y-4 animate-fade-in">
+        {showAddSong && (
+          <AddContentModal
+            chorale={selectedChorale}
+            onClose={() => setShowAddSong(false)}
+            onAdded={s => setSongs(prev => [s, ...prev])}
+          />
+        )}
+
+        {/* Header chorale */}
+        <div className="flex items-center gap-3">
+          <button onClick={back} className="p-2 rounded-xl hover:bg-cream-darker dark:hover:bg-charcoal-light/20 text-slate-400">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          {selectedChorale.logo_url ? (
+            <img src={selectedChorale.logo_url} className="w-12 h-12 rounded-xl object-cover" alt="" />
+          ) : (
+            <div className="w-12 h-12 rounded-xl bg-emerald-medium/10 flex items-center justify-center text-xl">🎵</div>
+          )}
+          <div className="flex-grow">
+            <h2 className="font-serif font-bold text-emerald-deep dark:text-cream-base">{selectedChorale.name}</h2>
+            <p className="text-xs text-slate-400">{selectedChorale.church} · {selectedChorale.city}</p>
+          </div>
+          <span className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${TYPE_COLORS[selectedChorale.type]}`}>
+            {TYPE_LABELS[selectedChorale.type]}
+          </span>
+        </div>
+
+        {/* Recherche dans la chorale */}
+        <div className="flex gap-2">
+          <div className="flex-grow relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-cream-darker dark:border-charcoal-light/10 bg-white dark:bg-charcoal-card text-sm outline-none"
+              placeholder={isPrayer ? "Chercher une prière..." : "Chercher une chanson..."}
+            />
+          </div>
+          {!isPrayer && (
+            <div className="relative">
+              <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+              <input value={psalmSearch} onChange={e => setPsalmSearch(e.target.value)} type="number" min="1" max="150"
+                className="w-24 pl-8 pr-2 py-2.5 rounded-xl border border-cream-darker dark:border-charcoal-light/10 bg-white dark:bg-charcoal-card text-sm outline-none"
+                placeholder="Ps."
+              />
+            </div>
+          )}
+          <button onClick={() => setShowAddSong(true)}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-medium hover:bg-emerald-deep text-white rounded-xl text-xs font-bold active:scale-95 transition-all">
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Ajouter</span>
+          </button>
+        </div>
+
+        {/* Liste des chansons / prières */}
+        {filteredSongs.length === 0 ? (
+          <div className="text-center py-16 space-y-3">
+            <div className="text-4xl">{isPrayer ? '🙏' : '🎵'}</div>
+            <p className="text-slate-400 text-sm">
+              {isPrayer ? 'Aucune prière encore. Soyez le premier à en ajouter !' : 'Aucune chanson encore. Soyez le premier à en ajouter !'}
+            </p>
+            <button onClick={() => setShowAddSong(true)}
+              className="px-6 py-2 bg-emerald-medium text-white rounded-xl text-xs font-bold hover:bg-emerald-deep transition-all">
+              {isPrayer ? 'Ajouter une prière' : 'Ajouter une chanson'}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredSongs.map(song => (
+              <div key={song.id} className="bg-white dark:bg-charcoal-card border border-cream-darker dark:border-charcoal-light/10 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => playingId === song.id ? stopAudio() : playAudio(song)}
+                    disabled={!song.audio_url}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all active:scale-95 ${
+                      song.audio_url
+                        ? 'bg-emerald-medium text-white hover:bg-emerald-deep shadow-md'
+                        : 'bg-slate-100 dark:bg-charcoal-light/10 text-slate-300 cursor-not-allowed'
+                    }`}>
+                    {playingId === song.id ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-current" />}
+                  </button>
+                  <div className="flex-grow min-w-0">
+                    <p className="font-bold text-sm text-emerald-deep dark:text-cream-base truncate">{song.name}</p>
+                    <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                      {song.psalm_number && (
+                        <span className="text-[10px] bg-gold-bright/10 text-gold-deep dark:text-gold-bright px-2 py-0.5 rounded-full border border-gold-muted/20 font-bold">
+                          Ps. {song.psalm_number}
+                        </span>
+                      )}
+                      {song.language && (
+                        <span className="text-[10px] text-slate-400">{song.language}</span>
+                      )}
+                      {song.duration && (
+                        <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
+                          <Clock className="w-2.5 h-2.5" />{song.duration}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {(song.lyrics_text || song.lyrics_image_url) && (
+                    <button onClick={() => setShowLyricsFor(showLyrics === song.id ? null : song.id)}
+                      className="p-2 text-slate-400 hover:text-emerald-medium rounded-lg hover:bg-emerald-medium/5 transition-colors">
+                      <BookOpen className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                {showLyrics === song.id && (
+                  <div className="border-t border-cream-darker dark:border-charcoal-light/10 pt-3 space-y-2">
+                    {song.lyrics_text && (
+                      <p className="text-xs text-slate-600 dark:text-cream-base/70 whitespace-pre-line leading-relaxed">{song.lyrics_text}</p>
+                    )}
+                    {song.lyrics_image_url && (
+                      <img src={song.lyrics_image_url} className="max-w-full rounded-lg" alt="paroles" />
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Vue liste des chorales ────────────────────────────────────────────────
   return (
-    <div className="space-y-4 pb-24 animate-fade-in">
+    <div className="space-y-5 animate-fade-in">
+      {showCreateChoir && (
+        <CreateChoirModal
+          denomination={tab}
+          onClose={() => setShowCreateChoir(false)}
+          onCreated={c => setChorales(prev => [c, ...prev])}
+        />
+      )}
 
-      {/* ── En-tête ───────────────────────────────────────────────────── */}
+      {/* Titre + bouton changer dénomination */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-serif text-2xl font-bold text-emerald-deep dark:text-cream-base flex items-center gap-2">
-            <Music className="w-6 h-6 text-emerald-medium" />
-            Chants Sacrés
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-cream-base/60 mt-0.5">
-            Chorales, chants, prières — écoute & télécharge
-          </p>
+          <h1 className="font-serif text-2xl font-bold text-emerald-deep dark:text-cream-base">🎵 Chants Sacrés</h1>
+          <p className="text-xs text-slate-400 mt-0.5">Chorales, chansons et prières de la communauté</p>
         </div>
-        <button
-          onClick={() => setShowCreateChorale(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-medium text-white rounded-xl text-xs font-bold hover:bg-emerald-deep transition-all shadow-md"
-        >
-          <Plus className="w-4 h-4" /> Créer ma chorale
+        <button onClick={() => setShowDenomPicker(true)}
+          className="text-[10px] text-slate-400 hover:text-emerald-medium border border-cream-darker dark:border-charcoal-light/10 px-3 py-1.5 rounded-lg transition-colors">
+          Changer ✝️/⭐
         </button>
       </div>
 
-      {/* ── Tabs Catholique / Évangélique ─────────────────────────────── */}
-      <div className="flex gap-3">
-        {(['catholique', 'evangelique'] as Courant[]).map(c => (
-          <button
-            key={c}
-            onClick={() => { setCourant(c); setSelectedChorale(null); setSearch(''); }}
-            className={`flex-1 py-3 rounded-2xl text-sm font-bold transition-all border-2 ${
-              courant === c
-                ? 'bg-emerald-medium text-white border-emerald-medium shadow-md'
-                : 'bg-white dark:bg-charcoal-card border-cream-darker dark:border-charcoal-light/10 text-slate-500 hover:border-emerald-medium/40'
-            }`}
-          >
-            {c === 'catholique' ? '✝️ Catholique' : '📖 Évangélique'}
+      {/* Onglets catholique / évangélique */}
+      <div className="flex rounded-2xl overflow-hidden border border-cream-darker dark:border-charcoal-light/10 bg-white dark:bg-charcoal-card">
+        {(['catholique', 'evangelique'] as const).map(d => (
+          <button key={d} onClick={() => setTab(d)}
+            className={`flex-1 py-3 text-xs font-bold transition-all ${
+              tab === d
+                ? 'bg-emerald-medium text-white'
+                : 'text-slate-400 hover:text-emerald-medium hover:bg-emerald-medium/5'
+            }`}>
+            {d === 'catholique' ? '✝️ Catholique' : '⭐ Évangélique'}
           </button>
         ))}
       </div>
 
-      {/* ── Vue : liste chorales ──────────────────────────────────────── */}
-      {!selectedChorale && (
-        <>
-          {/* Recherche chorale */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Rechercher une chorale..."
-              className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl border border-cream-darker dark:border-charcoal-light/20 bg-white dark:bg-charcoal-card focus:outline-none focus:ring-1 focus:ring-emerald-medium dark:text-cream-base"
-            />
-          </div>
-
-          {loading ? (
-            <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-emerald-medium" /></div>
-          ) : filteredChorales.length === 0 ? (
-            <div className="text-center py-12 space-y-3">
-              <Music className="w-12 h-12 text-slate-300 mx-auto" />
-              <p className="text-sm text-slate-400">Aucune chorale enregistrée pour l'instant.</p>
-              <button onClick={() => setShowCreateChorale(true)} className="text-emerald-medium text-sm font-bold hover:underline">
-                + Être le premier à créer une chorale {courant}
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {filteredChorales.map(chorale => (
-                <button
-                  key={chorale.id}
-                  onClick={() => handleSelectChorale(chorale)}
-                  className="flex items-center gap-3 p-4 rounded-2xl border border-cream-darker dark:border-charcoal-light/10 bg-white dark:bg-charcoal-card hover:border-emerald-medium/40 hover:bg-emerald-medium/5 transition-all text-left group shadow-sm"
-                >
-                  {/* Logo chorale */}
-                  <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-emerald-medium/10 border border-emerald-medium/20">
-                    {chorale.logo_url ? (
-                      <img src={chorale.logo_url} alt={chorale.nom} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Music className="w-6 h-6 text-emerald-medium" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-grow min-w-0">
-                    <p className="font-serif text-sm font-bold text-slate-800 dark:text-cream-base truncate group-hover:text-emerald-deep">
-                      {chorale.nom}
-                    </p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">
-                      {chorale.type === 'chorale' ? '🎶 Chorale' : chorale.type === 'groupe_priere' ? '🙏 Groupe de prière' : '✝️ Mouvement'}
-                      {chorale.ville && ` · ${chorale.ville}`}
-                    </p>
-                    <p className="text-[10px] text-emerald-medium font-bold mt-1">
-                      {chorale.chansons_count || 0} chant(s)
-                    </p>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-medium shrink-0" />
-                </button>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* ── Vue : chansons d'une chorale ─────────────────────────────── */}
-      {selectedChorale && (
-        <div className="space-y-4">
-          {/* Header chorale sélectionnée */}
-          <div className="flex items-center gap-3 p-4 rounded-2xl bg-emerald-medium/5 border border-emerald-medium/20">
-            <button onClick={() => setSelectedChorale(null)} className="text-slate-400 hover:text-emerald-medium">
-              <ChevronRight className="w-5 h-5 rotate-180" />
-            </button>
-            <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0">
-              {selectedChorale.logo_url
-                ? <img src={selectedChorale.logo_url} alt="" className="w-full h-full object-cover" />
-                : <div className="w-full h-full bg-emerald-medium/20 flex items-center justify-center"><Music className="w-5 h-5 text-emerald-medium" /></div>
-              }
-            </div>
-            <div className="flex-grow">
-              <p className="font-serif font-bold text-emerald-deep dark:text-cream-base">{selectedChorale.nom}</p>
-              <p className="text-[10px] text-slate-400">{chansons.length} chant(s) disponible(s)</p>
-            </div>
-            <button
-              onClick={() => setShowAddChanson(true)}
-              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-medium text-white rounded-xl text-xs font-bold hover:bg-emerald-deep transition-all"
-            >
-              <Plus className="w-3.5 h-3.5" /> Ajouter
-            </button>
-          </div>
-
-          {/* Message quota */}
-          {quotaInfo && (
-            <div className={`p-3 rounded-xl text-xs font-semibold ${quotaInfo.startsWith('✅') ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-orange-50 text-orange-700 border border-orange-200'}`}>
-              {quotaInfo}
-              <button onClick={() => setQuotaInfo(null)} className="ml-2 opacity-60">✕</button>
-            </div>
-          )}
-
-          {/* Recherches */}
-          <div className="flex gap-2">
-            <div className="relative flex-grow">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-              <input
-                type="text"
-                value={search}
-                onChange={e => { setSearch(e.target.value); loadChansons(selectedChorale.id); }}
-                placeholder="Rechercher un chant..."
-                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-cream-darker dark:border-charcoal-light/20 bg-white dark:bg-charcoal-card focus:outline-none focus:ring-1 focus:ring-emerald-medium dark:text-cream-base"
-              />
-            </div>
-            <div className="relative w-32">
-              <BookOpen className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-              <input
-                type="text"
-                value={searchPsaume}
-                onChange={e => { setSearchPsaume(e.target.value); loadChansons(selectedChorale.id); }}
-                placeholder="Psaume 21..."
-                className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-cream-darker dark:border-charcoal-light/20 bg-white dark:bg-charcoal-card focus:outline-none focus:ring-1 focus:ring-emerald-medium dark:text-cream-base"
-              />
-            </div>
-          </div>
-
-          {/* Liste chansons */}
-          {loading ? (
-            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-emerald-medium" /></div>
-          ) : chansons.length === 0 ? (
-            <div className="text-center py-10 space-y-2">
-              <Music className="w-10 h-10 text-slate-200 mx-auto" />
-              <p className="text-sm text-slate-400">Aucun chant pour l'instant.</p>
-              <button onClick={() => setShowAddChanson(true)} className="text-emerald-medium text-sm font-bold hover:underline">
-                + Ajouter le premier chant
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {chansons.map(chanson => (
-                <div key={chanson.id} className="flex items-center gap-3 p-3.5 rounded-2xl border border-cream-darker dark:border-charcoal-light/10 bg-white dark:bg-charcoal-card shadow-sm">
-                  {/* Icône type */}
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                    chanson.type_contenu === 'audio' ? 'bg-emerald-medium/10' :
-                    chanson.type_contenu === 'image' ? 'bg-blue-50' :
-                    chanson.type_contenu === 'priere' ? 'bg-purple-50' : 'bg-amber-50'
-                  }`}>
-                    {chanson.type_contenu === 'audio' && <Music className="w-5 h-5 text-emerald-medium" />}
-                    {chanson.type_contenu === 'image' && <Image className="w-5 h-5 text-blue-500" />}
-                    {chanson.type_contenu === 'texte' && <FileText className="w-5 h-5 text-amber-500" />}
-                    {chanson.type_contenu === 'priere' && <BookOpen className="w-5 h-5 text-purple-500" />}
-                  </div>
-
-                  <div className="flex-grow min-w-0">
-                    <p className="text-sm font-bold text-slate-800 dark:text-cream-base truncate">{chanson.titre}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {chanson.psaume && (
-                        <span className="text-[9px] bg-gold-deep/10 text-gold-deep px-2 py-0.5 rounded-full font-bold">{chanson.psaume}</span>
-                      )}
-                      {chanson.format_fichier && (
-                        <span className="text-[9px] text-slate-400 uppercase font-bold">{chanson.format_fichier}</span>
-                      )}
-                      {chanson.duree && (
-                        <span className="text-[9px] text-slate-400">{chanson.duree}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    {/* Écouter */}
-                    {chanson.audio_url && (
-                      <button
-                        onClick={() => handlePlay(chanson)}
-                        className={`p-2 rounded-xl transition-all ${
-                          playingId === chanson.id
-                            ? 'bg-emerald-medium text-white'
-                            : 'text-slate-400 hover:text-emerald-medium hover:bg-emerald-medium/10'
-                        }`}
-                        title="Écouter"
-                      >
-                        {playingId === chanson.id ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                      </button>
-                    )}
-                    {/* Télécharger */}
-                    {chanson.audio_url && (
-                      <button
-                        onClick={() => handleDownload(chanson)}
-                        className="p-2 rounded-xl text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-all"
-                        title="Télécharger (3/jour gratuits)"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Recherche + filtres + création */}
+      <div className="flex gap-2 flex-wrap">
+        <div className="flex-grow relative min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-cream-darker dark:border-charcoal-light/10 bg-white dark:bg-charcoal-card text-sm outline-none"
+            placeholder="Chercher une chorale..."
+          />
         </div>
-      )}
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+          className="border border-cream-darker dark:border-charcoal-light/10 rounded-xl px-3 py-2.5 text-xs bg-white dark:bg-charcoal-card text-slate-600 dark:text-cream-base outline-none">
+          <option value="all">Tous les types</option>
+          <option value="en_langue">🎵 En langue</option>
+          <option value="jeunesse">🌟 Jeunesse</option>
+          <option value="groupe_priere">🙏 Groupe de prière</option>
+        </select>
+        <button onClick={() => setShowCreateChoir(true)}
+          className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-medium hover:bg-emerald-deep text-white rounded-xl text-xs font-bold active:scale-95 transition-all">
+          <Plus className="w-4 h-4" /> Créer
+        </button>
+      </div>
 
-      {/* ── Modal : créer une chorale ─────────────────────────────────── */}
-      {showCreateChorale && (
-        <CreateChoraleModal
-          courant={courant}
-          onClose={() => setShowCreateChorale(false)}
-          onCreated={() => { setShowCreateChorale(false); loadChorales(); }}
-        />
-      )}
-
-      {/* ── Modal : ajouter une chanson ───────────────────────────────── */}
-      {showAddChanson && selectedChorale && (
-        <AddChansonModal
-          chorale={selectedChorale}
-          onClose={() => setShowAddChanson(false)}
-          onAdded={() => { setShowAddChanson(false); loadChansons(selectedChorale.id); }}
-        />
-      )}
-    </div>
-  );
-}
-
-// ── Modal Créer une Chorale ──────────────────────────────────────────────
-function CreateChoraleModal({ courant, onClose, onCreated }: {
-  courant: Courant;
-  onClose: () => void;
-  onCreated: () => void;
-}) {
-  const [form, setForm] = useState({ nom: '', type: 'chorale', langue: 'mixte', categorie: 'adulte', description: '', ville: '' });
-  const [logo, setLogo] = useState<File | null>(null);
-  const [logoPreview, setLogoPreview] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    setLogo(f);
-    setLogoPreview(URL.createObjectURL(f));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    if (!logo) { setError('Le logo est obligatoire pour créer une chorale.'); return; }
-    if (!form.nom.trim()) { setError('Le nom est obligatoire.'); return; }
-
-    setLoading(true);
-    try {
-      const fd = new FormData();
-      fd.append('nom', form.nom);
-      fd.append('courant', courant);
-      fd.append('type', form.type);
-      fd.append('langue', form.langue);
-      fd.append('categorie', form.categorie);
-      fd.append('description', form.description);
-      fd.append('ville', form.ville);
-      fd.append('logo', logo);
-
-      const res = await fetch(`${API}/api/chorales`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token()}` },
-        body: fd,
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.message || 'Erreur serveur');
-      }
-      onCreated();
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de la création.');
-    }
-    setLoading(false);
-  };
-
-  return (
-    <div className="fixed inset-0 z-[999] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white dark:bg-charcoal-card rounded-3xl w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-serif text-lg font-bold text-emerald-deep dark:text-cream-base">Créer ma chorale</h3>
-            <button onClick={onClose}><X className="w-5 h-5 text-slate-400" /></button>
-          </div>
-
-          {error && (
-            <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Logo — OBLIGATOIRE */}
-            <div>
-              <label className="block text-xs font-bold text-slate-600 dark:text-cream-base/70 mb-2">
-                Logo de la chorale <span className="text-red-500">* obligatoire</span>
-              </label>
-              <label className={`flex flex-col items-center justify-center w-full h-32 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${
-                logoPreview ? 'border-emerald-medium' : 'border-slate-200 hover:border-emerald-medium/50'
-              }`}>
-                {logoPreview ? (
-                  <img src={logoPreview} alt="logo" className="w-24 h-24 object-contain rounded-xl" />
+      {/* Liste chorales */}
+      {loading ? (
+        <div className="text-center py-12 text-slate-400 text-sm">Chargement des chorales...</div>
+      ) : filteredChorales.length === 0 ? (
+        <div className="text-center py-16 space-y-3">
+          <div className="text-4xl">🎵</div>
+          <p className="text-slate-400 text-sm">Aucune chorale trouvée.</p>
+          <button onClick={() => setShowCreateChoir(true)}
+            className="px-6 py-2 bg-emerald-medium text-white rounded-xl text-xs font-bold hover:bg-emerald-deep transition-all">
+            Créer la première chorale
+          </button>
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {filteredChorales.map(c => (
+            <button key={c.id} onClick={() => openChorale(c)}
+              className="text-left bg-white dark:bg-charcoal-card border border-cream-darker dark:border-charcoal-light/10 rounded-2xl p-4 hover:border-emerald-medium/30 hover:shadow-md transition-all group">
+              <div className="flex items-start gap-3">
+                {c.logo_url ? (
+                  <img src={c.logo_url} className="w-12 h-12 rounded-xl object-cover flex-shrink-0 border border-cream-darker" alt="" />
                 ) : (
-                  <>
-                    <Upload className="w-8 h-8 text-slate-300 mb-2" />
-                    <span className="text-xs text-slate-400">Cliquer pour uploader le logo</span>
-                    <span className="text-[10px] text-slate-300">JPG, PNG, WEBP</span>
-                  </>
-                )}
-                <input type="file" accept=".jpg,.jpeg,.png,.webp" onChange={handleLogo} className="hidden" />
-              </label>
-            </div>
-
-            {/* Nom */}
-            <div>
-              <label className="block text-xs font-bold text-slate-600 dark:text-cream-base/70 mb-1">Nom de la chorale *</label>
-              <input
-                type="text"
-                value={form.nom}
-                onChange={e => setForm(p => ({ ...p, nom: e.target.value }))}
-                placeholder="Ex: Chorale Cécilienne Saint-Jean"
-                className="w-full px-4 py-2.5 text-sm rounded-xl border border-cream-darker dark:border-charcoal-light/20 bg-slate-50 dark:bg-charcoal-dark focus:outline-none focus:ring-1 focus:ring-emerald-medium dark:text-cream-base"
-              />
-            </div>
-
-            {/* Type */}
-            <div>
-              <label className="block text-xs font-bold text-slate-600 dark:text-cream-base/70 mb-2">Type de groupe *</label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { val: 'chorale', label: '🎶 Chorale', desc: 'Chants' },
-                  { val: 'groupe_priere', label: '🙏 Prière', desc: 'Prières uniquement' },
-                  { val: 'mouvement', label: '✝️ Mouvement', desc: 'Chants + prières' },
-                ].map(t => (
-                  <button
-                    key={t.val} type="button"
-                    onClick={() => setForm(p => ({ ...p, type: t.val }))}
-                    className={`p-2 rounded-xl border text-xs font-semibold transition-all text-center ${
-                      form.type === t.val ? 'border-emerald-medium bg-emerald-medium/10 text-emerald-deep' : 'border-cream-darker text-slate-500'
-                    }`}
-                  >
-                    <div>{t.label}</div>
-                    <div className="text-[9px] opacity-70">{t.desc}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Langue */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-600 dark:text-cream-base/70 mb-1">Langue</label>
-                <select
-                  value={form.langue}
-                  onChange={e => setForm(p => ({ ...p, langue: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-cream-darker dark:border-charcoal-light/20 bg-slate-50 dark:bg-charcoal-dark focus:outline-none dark:text-cream-base"
-                >
-                  <option value="langue">En langue</option>
-                  <option value="francais">En français</option>
-                  <option value="mixte">Mixte</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 dark:text-cream-base/70 mb-1">Catégorie</label>
-                <select
-                  value={form.categorie}
-                  onChange={e => setForm(p => ({ ...p, categorie: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-cream-darker dark:border-charcoal-light/20 bg-slate-50 dark:bg-charcoal-dark focus:outline-none dark:text-cream-base"
-                >
-                  <option value="adulte">Adulte</option>
-                  <option value="jeunesse">Jeunesse</option>
-                  <option value="enfant">Enfant</option>
-                  <option value="mixte">Mixte</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Ville */}
-            <div>
-              <label className="block text-xs font-bold text-slate-600 dark:text-cream-base/70 mb-1">Ville (optionnel)</label>
-              <input
-                type="text"
-                value={form.ville}
-                onChange={e => setForm(p => ({ ...p, ville: e.target.value }))}
-                placeholder="Ex: Cotonou, Porto-Novo..."
-                className="w-full px-4 py-2.5 text-sm rounded-xl border border-cream-darker dark:border-charcoal-light/20 bg-slate-50 dark:bg-charcoal-dark focus:outline-none dark:text-cream-base"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-emerald-medium text-white rounded-2xl font-bold text-sm hover:bg-emerald-deep transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-              {loading ? 'Création en cours...' : 'Créer la chorale'}
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Modal Ajouter une Chanson ────────────────────────────────────────────
-function AddChansonModal({ chorale, onClose, onAdded }: {
-  chorale: Chorale;
-  onClose: () => void;
-  onAdded: () => void;
-}) {
-  const [form, setForm] = useState({ titre: '', psaume: '', type_contenu: 'audio' as TypeContenu, texte: '' });
-  const [audioFile, setAudioFile] = useState<File | null>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-  const [audioPreviewUrl, setAudioPreviewUrl] = useState('');
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<any>(null);
-
-  const isGroupePriere = chorale.type === 'groupe_priere';
-
-  // Enregistrement micro
-  const startRecording = async () => {
-    chunksRef.current = [];
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
-      mediaRecorderRef.current = mr;
-      mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      mr.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        setAudioBlob(blob);
-        setAudioPreviewUrl(URL.createObjectURL(blob));
-        stream.getTracks().forEach(t => t.stop());
-      };
-      mr.start();
-      setIsRecording(true);
-      setRecordingTime(0);
-      timerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
-    } catch { setError('Microphone inaccessible.'); }
-  };
-
-  const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
-    setIsRecording(false);
-    clearInterval(timerRef.current);
-  };
-
-  const formatTime = (s: number) => `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    if (!form.titre.trim()) { setError('Le titre est obligatoire.'); return; }
-
-    setLoading(true);
-    try {
-      const fd = new FormData();
-      fd.append('chorale_id', chorale.id);
-      fd.append('titre', form.titre);
-      fd.append('psaume', form.psaume);
-      fd.append('type_contenu', form.type_contenu);
-      fd.append('texte', form.texte);
-
-      if (audioFile) fd.append('audio', audioFile);
-      if (imageFile) fd.append('image', imageFile);
-
-      // Enregistrement micro → envoyer en base64
-      if (audioBlob && !audioFile) {
-        const reader = new FileReader();
-        await new Promise<void>(resolve => {
-          reader.onloadend = () => {
-            fd.append('audio_base64', reader.result as string);
-            resolve();
-          };
-          reader.readAsDataURL(audioBlob);
-        });
-      }
-
-      const res = await fetch(`${API}/api/chansons`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token()}` },
-        body: fd,
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.message || 'Erreur serveur');
-      }
-      onAdded();
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de l\'ajout.');
-    }
-    setLoading(false);
-  };
-
-  const typeOptions = isGroupePriere
-    ? [{ val: 'priere', label: '🙏 Prière', icon: BookOpen }]
-    : [
-        { val: 'audio', label: '🎵 Audio', icon: Music },
-        { val: 'texte', label: '📝 Texte', icon: FileText },
-        { val: 'image', label: '🖼️ Image', icon: Image },
-      ];
-
-  return (
-    <div className="fixed inset-0 z-[999] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white dark:bg-charcoal-card rounded-3xl w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-serif text-lg font-bold text-emerald-deep dark:text-cream-base">
-              {isGroupePriere ? 'Ajouter une prière' : 'Ajouter un chant'}
-            </h3>
-            <button onClick={onClose}><X className="w-5 h-5 text-slate-400" /></button>
-          </div>
-
-          <p className="text-xs text-slate-400 bg-slate-50 dark:bg-charcoal-dark rounded-xl px-3 py-2">
-            Chorale : <strong>{chorale.nom}</strong>
-          </p>
-
-          {error && (
-            <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600">
-              <AlertCircle className="w-4 h-4 shrink-0" /> {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Titre */}
-            <div>
-              <label className="block text-xs font-bold text-slate-600 dark:text-cream-base/70 mb-1">Titre *</label>
-              <input
-                type="text"
-                value={form.titre}
-                onChange={e => setForm(p => ({ ...p, titre: e.target.value }))}
-                placeholder={isGroupePriere ? "Ex: Prière du soir" : "Ex: Gloire à Dieu"}
-                className="w-full px-4 py-2.5 text-sm rounded-xl border border-cream-darker dark:border-charcoal-light/20 bg-slate-50 dark:bg-charcoal-dark focus:outline-none focus:ring-1 focus:ring-emerald-medium dark:text-cream-base"
-              />
-            </div>
-
-            {/* Psaume (pas pour groupe de prière) */}
-            {!isGroupePriere && (
-              <div>
-                <label className="block text-xs font-bold text-slate-600 dark:text-cream-base/70 mb-1">Psaume associé (optionnel)</label>
-                <input
-                  type="text"
-                  value={form.psaume}
-                  onChange={e => setForm(p => ({ ...p, psaume: e.target.value }))}
-                  placeholder="Ex: Psaume 23, Psaume 91..."
-                  className="w-full px-4 py-2.5 text-sm rounded-xl border border-cream-darker dark:border-charcoal-light/20 bg-slate-50 dark:bg-charcoal-dark focus:outline-none focus:ring-1 focus:ring-emerald-medium dark:text-cream-base"
-                />
-              </div>
-            )}
-
-            {/* Type de contenu */}
-            {!isGroupePriere && (
-              <div>
-                <label className="block text-xs font-bold text-slate-600 dark:text-cream-base/70 mb-2">Type de contenu</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {typeOptions.map(t => (
-                    <button
-                      key={t.val} type="button"
-                      onClick={() => setForm(p => ({ ...p, type_contenu: t.val as TypeContenu }))}
-                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all ${
-                        form.type_contenu === t.val ? 'border-emerald-medium bg-emerald-medium/10 text-emerald-deep' : 'border-cream-darker text-slate-500'
-                      }`}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Upload audio */}
-            {(form.type_contenu === 'audio' && !isGroupePriere) && (
-              <div className="space-y-3">
-                {/* Upload fichier */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-cream-base/70 mb-1">
-                    Uploader un fichier audio (tous formats)
-                  </label>
-                  <label className="flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-slate-200 hover:border-emerald-medium/50 cursor-pointer transition-all">
-                    <Upload className="w-5 h-5 text-slate-300 shrink-0" />
-                    <div>
-                      <p className="text-xs font-semibold text-slate-600 dark:text-cream-base/70">
-                        {audioFile ? audioFile.name : 'Choisir un fichier audio'}
-                      </p>
-                      <p className="text-[10px] text-slate-400">MP3, WAV, AAC, OGG, FLAC, M4A, WMA, OPUS, AMR...</p>
-                    </div>
-                    <input type="file" accept={AUDIO_ACCEPT} onChange={e => setAudioFile(e.target.files?.[0] || null)} className="hidden" />
-                  </label>
-                </div>
-
-                {/* Séparateur */}
-                <div className="flex items-center gap-2">
-                  <div className="flex-grow h-px bg-slate-100" />
-                  <span className="text-[10px] text-slate-400 font-bold">OU</span>
-                  <div className="flex-grow h-px bg-slate-100" />
-                </div>
-
-                {/* Enregistrement micro */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-cream-base/70 mb-2">
-                    Enregistrer directement au micro 🎤
-                  </label>
-                  {!isRecording && !audioBlob && (
-                    <button
-                      type="button"
-                      onClick={startRecording}
-                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-50 border border-red-200 text-red-500 text-sm font-bold hover:bg-red-100 transition-all"
-                    >
-                      <Mic className="w-4 h-4" /> Démarrer l'enregistrement
-                    </button>
-                  )}
-                  {isRecording && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-xl">
-                        <div className="flex items-center gap-2 text-red-500 text-sm font-bold">
-                          <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-ping" />
-                          Enregistrement... {formatTime(recordingTime)}
-                        </div>
-                        <button type="button" onClick={stopRecording} className="flex items-center gap-1 px-3 py-1 bg-red-500 text-white rounded-lg text-xs font-bold">
-                          <Square className="w-3 h-3" /> Arrêter
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {audioBlob && (
-                    <div className="space-y-2">
-                      <audio src={audioPreviewUrl} controls className="w-full h-10 rounded-xl" />
-                      <button type="button" onClick={() => { setAudioBlob(null); setAudioPreviewUrl(''); }} className="text-xs text-red-400 hover:underline">
-                        Supprimer et réenregistrer
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Upload image (partition) */}
-            {form.type_contenu === 'image' && (
-              <div>
-                <label className="block text-xs font-bold text-slate-600 dark:text-cream-base/70 mb-1">Image / Partition</label>
-                <label className="flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-slate-200 hover:border-emerald-medium/50 cursor-pointer transition-all">
-                  <Image className="w-5 h-5 text-slate-300 shrink-0" />
-                  <div>
-                    <p className="text-xs font-semibold text-slate-600 dark:text-cream-base/70">
-                      {imageFile ? imageFile.name : 'Choisir une image ou PDF'}
-                    </p>
-                    <p className="text-[10px] text-slate-400">JPG, PNG, WEBP, PDF</p>
+                  <div className="w-12 h-12 rounded-xl bg-emerald-medium/10 flex items-center justify-center text-xl flex-shrink-0">
+                    {c.type === 'groupe_priere' ? '🙏' : '🎵'}
                   </div>
-                  <input type="file" accept={IMAGE_ACCEPT} onChange={e => setImageFile(e.target.files?.[0] || null)} className="hidden" />
-                </label>
+                )}
+                <div className="flex-grow min-w-0">
+                  <p className="font-bold text-sm text-emerald-deep dark:text-cream-base group-hover:text-emerald-medium transition-colors truncate">
+                    {c.name}
+                  </p>
+                  <p className="text-[11px] text-slate-400 truncate">{c.church} · {c.city}</p>
+                  <span className={`mt-1.5 inline-block px-2 py-0.5 rounded-lg text-[10px] font-bold border ${TYPE_COLORS[c.type]}`}>
+                    {TYPE_LABELS[c.type]}
+                  </span>
+                </div>
+                {c.songs_count !== undefined && (
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-lg font-bold text-emerald-medium">{c.songs_count}</p>
+                    <p className="text-[9px] text-slate-400">titres</p>
+                  </div>
+                )}
               </div>
-            )}
-
-            {/* Texte / Prière */}
-            {(form.type_contenu === 'texte' || form.type_contenu === 'priere' || isGroupePriere) && (
-              <div>
-                <label className="block text-xs font-bold text-slate-600 dark:text-cream-base/70 mb-1">
-                  {isGroupePriere ? 'Texte de la prière' : 'Paroles du chant'}
-                </label>
-                <textarea
-                  value={form.texte}
-                  onChange={e => setForm(p => ({ ...p, texte: e.target.value }))}
-                  rows={6}
-                  placeholder={isGroupePriere ? "Seigneur, nous te rendons grâce..." : "Écris les paroles ici..."}
-                  className="w-full px-4 py-3 text-sm rounded-xl border border-cream-darker dark:border-charcoal-light/20 bg-slate-50 dark:bg-charcoal-dark focus:outline-none focus:ring-1 focus:ring-emerald-medium dark:text-cream-base resize-none"
-                />
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-emerald-medium text-white rounded-2xl font-bold text-sm hover:bg-emerald-deep transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-              {loading ? 'Ajout en cours...' : 'Ajouter le chant'}
+              {c.description && (
+                <p className="text-[11px] text-slate-400 mt-2 line-clamp-2">{c.description}</p>
+              )}
             </button>
-          </form>
+          ))}
         </div>
-      </div>
+      )}
     </div>
   );
 }

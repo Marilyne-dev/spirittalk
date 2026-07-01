@@ -3,7 +3,6 @@ import Pusher from 'pusher-js';
 const PUSHER_KEY = (import.meta as any).env?.VITE_PUSHER_APP_KEY || (import.meta as any).env?.VITE_PUSHER_KEY || '90d62d83f3f63ace0173';
 const PUSHER_CLUSTER = (import.meta as any).env?.VITE_PUSHER_APP_CLUSTER || (import.meta as any).env?.VITE_PUSHER_CLUSTER || 'eu';
 
-
 export interface PusherMessagePayload {
   id?: string;
   senderId: string;
@@ -31,7 +30,6 @@ export interface PusherPostPayload {
   verse_text?: string;
 }
 
-
 export interface PusherLikePayload {
   postId: string;
   likes: number;
@@ -48,7 +46,6 @@ export interface PusherCommentPayload {
   };
 }
 
-
 export interface PusherCallPayload {
   senderId: number;
   recipientId: number;
@@ -57,10 +54,9 @@ export interface PusherCallPayload {
 }
 
 export const pusherService = {
-initialize(
+  initialize(
     onNewMessage: (msg: PusherMessagePayload) => void,
     onNewPost: (post: PusherPostPayload) => void,
-    // 3ème arg = liveText (texte en cours de frappe, lettre par lettre)
     onFriendTyping: (friendId: string, isTyping: boolean, liveText?: string) => void,
     onCallSignal?: (payload: PusherCallPayload) => void,
     onPostLiked?: (payload: PusherLikePayload) => void,
@@ -74,8 +70,9 @@ initialize(
         forceTLS: true,
       });
 
-      // 1. Canal communauté
+      // ── 1. Canal communauté ───────────────────────────────────────────────
       const communityChannel = pusher.subscribe('spirittalk-community');
+
       communityChannel.bind('new-post', (data: any) => {
         console.log('🌍 [Pusher] New post:', data);
         onNewPost({
@@ -97,10 +94,7 @@ initialize(
 
       communityChannel.bind('post-liked', (data: any) => {
         console.log('❤️ [Pusher] Post liked:', data);
-        onPostLiked?.({
-          postId: String(data.postId),
-          likes: data.likes,
-        });
+        onPostLiked?.({ postId: String(data.postId), likes: data.likes });
       });
 
       communityChannel.bind('post-commented', (data: any) => {
@@ -117,40 +111,33 @@ initialize(
         });
       });
 
-      // 2. Canal messagerie
+      // ── 2. Canal messagerie ───────────────────────────────────────────────
       const chatChannel = pusher.subscribe('spirittalk-chat');
 
-     chatChannel.bind('new-message', (data: any) => {
-  console.log('💬 [Pusher] New message raw:', data);
-
-  // ✅ FIX : le broadcast envoie maintenant tout à plat
-  // On garde la compatibilité avec l'ancien format { message: {...} }
-  const msg = (data.senderId || data.recipientId) ? data : (data.message || data);
-
-  onNewMessage({
-    id: msg.id ? String(msg.id) : `dm_pusher_${Date.now()}`,
-    senderId: String(msg.senderId),
-    recipientId: String(msg.recipientId),
-    text: msg.text,
-    images: msg.images,
-    audioUrl: msg.audioUrl || msg.audio_url,
-    audioDuration: msg.audioDuration || msg.audio_duration,
-    timestamp: msg.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-  });
-});
+      chatChannel.bind('new-message', (data: any) => {
+        console.log('💬 [Pusher] New message raw:', data);
+        const msg = (data.senderId || data.recipientId) ? data : (data.message || data);
+        onNewMessage({
+          id: msg.id ? String(msg.id) : `dm_pusher_${Date.now()}`,
+          senderId: String(msg.senderId),
+          recipientId: String(msg.recipientId),
+          text: msg.text,
+          images: msg.images,
+          audioUrl: msg.audioUrl || msg.audio_url,
+          audioDuration: msg.audioDuration || msg.audio_duration,
+          timestamp: msg.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        });
+      });
 
       chatChannel.bind('typing-status', (data: any) => {
         console.log('✍️ [Pusher] Typing:', data);
         const senderId = data.senderId || data.userId;
         if (!senderId) return;
-
-        // liveText = texte en cours de frappe envoyé lettre par lettre
         const liveText: string | undefined = data.liveText ?? data.live_text ?? undefined;
-
         onFriendTyping(String(senderId), !!data.isTyping, liveText);
       });
 
-      // 3. Canal appels
+      // ── 3. Canal appels ───────────────────────────────────────────────────
       const callChannel = pusher.subscribe('spirittalk-calls');
       callChannel.bind('call-signal', (data: any) => {
         console.log('📞 [Pusher] Call signal:', data);
@@ -162,6 +149,24 @@ initialize(
         });
       });
 
+      // ── 4. Canal chorales (temps réel) ────────────────────────────────────
+      const choirChannel = pusher.subscribe('spirittalk-choir');
+
+      choirChannel.bind('new-chorale', (data: any) => {
+        console.log('🎵 [Pusher] Nouvelle chorale:', data);
+        window.dispatchEvent(new CustomEvent('spirittalk_choir_event', {
+          detail: { type: 'new_chorale', data: { ...data, id: String(data.id) } }
+        }));
+      });
+
+      choirChannel.bind('new-chanson', (data: any) => {
+        console.log('🎶 [Pusher] Nouvelle chanson:', data);
+        window.dispatchEvent(new CustomEvent('spirittalk_choir_event', {
+          detail: { type: 'new_chanson', data: { ...data, id: String(data.id) } }
+        }));
+      });
+
+      // ── Connexion ─────────────────────────────────────────────────────────
       pusher.connection.bind('state_change', (states: { current: string }) => {
         console.log(`🔌 [Pusher] ${states.current}`);
       });

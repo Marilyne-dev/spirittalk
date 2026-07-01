@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\NouvelleChanson;
 use App\Models\Chanson;
 use App\Models\Telechargement;
 use Illuminate\Http\Request;
@@ -21,7 +22,7 @@ class ChansonController extends Controller
 
         // Recherche par titre ou paroles
         if ($request->search) {
-            $query->where(function($q) use ($request) {
+            $query->where(function ($q) use ($request) {
                 $q->where('titre', 'like', '%' . $request->search . '%')
                   ->orWhere('psaume', 'like', '%' . $request->search . '%')
                   ->orWhere('texte', 'like', '%' . $request->search . '%');
@@ -48,17 +49,17 @@ class ChansonController extends Controller
             'duree'        => 'nullable|string|max:20',
         ]);
 
-        $audioUrl  = null;
-        $imageUrl  = null;
-        $format    = null;
-        $taille    = null;
+        $audioUrl = null;
+        $imageUrl = null;
+        $format   = null;
+        $taille   = null;
 
         // ── Upload fichier audio (tous formats) ──────────────────────────
         if ($request->hasFile('audio')) {
-            $file   = $request->file('audio');
-            $format = strtolower($file->getClientOriginalExtension());
-            $taille = $file->getSize();
-            $path   = $file->store('chansons_audio', 'public');
+            $file     = $request->file('audio');
+            $format   = strtolower($file->getClientOriginalExtension());
+            $taille   = $file->getSize();
+            $path     = $file->store('chansons_audio', 'public');
             $audioUrl = config('app.url') . '/storage/' . $path;
         }
 
@@ -96,7 +97,12 @@ class ChansonController extends Controller
             'duree'          => $request->duree,
         ]);
 
-        return response()->json($chanson->load('user:id,name,avatar'), 201);
+        $chanson->load('user:id,name,avatar');
+
+        // ── Diffusion temps réel Pusher : tout le monde voit la nouvelle chanson ──
+        broadcast(new NouvelleChanson($chanson));
+
+        return response()->json($chanson, 201);
     }
 
     // ── Télécharger (avec quota gratuit 3/jour) ───────────────────────────

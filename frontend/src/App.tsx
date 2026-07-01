@@ -1,6 +1,6 @@
 import React, { useCallback, useState, useEffect, useRef, startTransition } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { Home, Sparkles, Search, User, Award, Moon, Sun, Bell, MessageSquare, Users, MessageCircle, Phone, PhoneOff, Play } from 'lucide-react';
+import { Home, Sparkles, Search, User, Award, Moon, Sun, Bell, Users, MessageCircle, Phone, PhoneOff, Music } from 'lucide-react';
 import { ChatMessage, Bookmark, Note, InspirationCard, Religion, CommunityPost, Friend, DirectMessage, SpiritNotification } from './types';
 import HomeView from './components/HomeView';
 import ChatView from './components/ChatView';
@@ -8,7 +8,7 @@ import SearchView from './components/SearchView';
 import ProfileView from './components/ProfileView';
 import CommunityView from './components/CommunityView';
 import InboxView from './components/InboxView';
-import VideoView from './components/Videoview';
+import ChoirView from './components/ChoirView';
 import QuizModal from './components/QuizModal';
 import InspirationModal from './components/InspirationModal';
 import AuthView from './components/AuthView';
@@ -124,7 +124,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
-  const [currentTab, setCurrentTab] = useState<'home' | 'community' | 'inbox' | 'chat' | 'search' | 'profile' | 'videos'>('home');
+  const [currentTab, setCurrentTab] = useState<'home' | 'community' | 'inbox' | 'chat' | 'search' | 'profile' | 'choir'>('home');
   const [darkMode, setDarkMode] = useState<boolean>(false);
   // Ajoute cet état après les autres useState
     const [showNotifications, setShowNotifications] = useState(false);
@@ -388,7 +388,7 @@ export default function App() {
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      await apiService.sendCallSignal(peerId, { sdp: btoa(unescape(encodeURIComponent(answer.sdp))), type: answer.type }, 'answer');
+      await apiService.sendCallSignal(peerId, { sdp: btoa(unescape(encodeURIComponent(answer.sdp ?? ''))), type: answer.type }, 'answer');
 
       currentCallRef.current = { peerId, mode };
       setActiveCall({ peerId, mode });
@@ -853,7 +853,7 @@ export default function App() {
       setActiveCall({ peerId, mode });
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      await apiService.sendCallSignal(peerId, { sdp: btoa(unescape(encodeURIComponent(offer.sdp))), type: offer.type, callMode: mode }, 'offer');
+      await apiService.sendCallSignal(peerId, { sdp: offer.sdp ? btoa(unescape(encodeURIComponent(offer.sdp))) : '', type: offer.type, callMode: mode }, 'offer');
     } catch (error) {
       console.warn('WebRTC setup failed', error);
       window.alert("Votre navigateur bloque l'accès au microphone.");
@@ -1005,7 +1005,7 @@ export default function App() {
                 { tab: 'community', icon: <Users className="w-5 h-5" />, title: 'Communauté' },
                 { tab: 'inbox', icon: <MessageCircle className="w-5 h-5" />, title: 'Messagerie', badge: Object.values(unreadCounts).reduce((a, b) => a + b, 0) },
                 { tab: 'chat', icon: <Sparkles className="w-5 h-5" />, title: 'Guidance IA' },
-                { tab: 'videos', icon: <Play className="w-5 h-5" />, title: 'Vidéos' },
+                { tab: 'choir', icon: <Music className="w-5 h-5" />, title: 'Chants Sacrés' },
                 { tab: 'search', icon: <Search className="w-5 h-5" />, title: 'Rechercher' },
                 { tab: 'profile', icon: <User className="w-5 h-5" />, title: 'Mon Profil' },
               ].map(({ tab, icon, title, badge }) => (
@@ -1114,8 +1114,8 @@ export default function App() {
                       {currentTab === 'chat' && (
                         <ChatView messages={chatMessages} onSendMessage={handleSendMessage} onBookmark={handleAddBookmark} isGenerating={isGenerating} />
                       )}
-                      {currentTab === 'videos' && (
-                        <VideoView />
+                      {currentTab === 'choir' && (
+                      <ChoirView user={user} />
                       )}
                       {currentTab === 'search' && (
                         <SearchView onBookmark={handleAddBookmark} onNavigateToChatWithQuery={handleNavigateToChatWithQuery} />
@@ -1133,7 +1133,7 @@ export default function App() {
               { tab: 'home', icon: <Home className="w-5 h-5 mb-1" />, label: 'Accueil' },
               { tab: 'community', icon: <Users className="w-5 h-5 mb-1" />, label: 'Communauté' },
               { tab: 'inbox', icon: <MessageCircle className="w-5 h-5 mb-1" />, label: 'Messages', badge: Object.values(unreadCounts).reduce((a, b) => a + b, 0) },
-              { tab: 'videos', icon: <Play className="w-5 h-5 mb-1" />, label: 'Vidéos' },
+             { tab: 'choir', icon: <Music className="w-5 h-5 mb-1" />, label: 'Chants' },
               { tab: 'chat', icon: <Sparkles className="w-5 h-5 mb-1" />, label: 'IA' },
               { tab: 'profile', icon: <User className="w-5 h-5 mb-1" />, label: 'Profil' },
             ].map(({ tab, icon, label, badge }) => (
