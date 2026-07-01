@@ -41,11 +41,18 @@ interface ChoirViewProps {
 
 const API_BASE = ((import.meta as any).env?.VITE_API_URL || 'https://marilyne.alwaysdata.net/spirittalk').replace(/\/$/, '');
 
+
+// PAR :
 const getHeaders = () => {
-  const token = localStorage.getItem('spirittalk_token');
-  const h: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
-  if (token) h['Authorization'] = `Bearer ${token}`;
-  return h;
+  try {
+    const user = JSON.parse(localStorage.getItem('spirittalk_user') || '{}');
+    const token = user?.token || user?.access_token || user?.api_token || '';
+    const h: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
+    if (token) h['Authorization'] = `Bearer ${token}`;
+    return h;
+  } catch {
+    return { 'Content-Type': 'application/json', Accept: 'application/json' };
+  }
 };
 
 // Chorales catholiques pré-enregistrées (seeds)
@@ -347,33 +354,54 @@ function CreateChoirModal({ denomination, onClose, onCreated }: {
     reader.readAsDataURL(file);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!logoBase64) return alert('Le logo officiel est obligatoire pour créer un groupe.');
-    if (!name.trim() || !church.trim() || !city.trim()) return alert('Remplissez tous les champs obligatoires.');
-    setLoading(true);
-    try {
-      let logoUrl = '';
-      const res = await fetch(`${API_BASE}/upload-audio`, {
-        method: 'POST', headers: getHeaders(),
-        body: JSON.stringify({ audio: logoBase64 })
-      });
-      if (res.ok) { const d = await res.json(); logoUrl = d.url || logoBase64; }
+// REMPLACER tout le handleSubmit par :
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!logoBase64) return alert('Le logo officiel est obligatoire pour créer un groupe.');
+  if (!name.trim() || !church.trim() || !city.trim()) return alert('Remplissez tous les champs obligatoires.');
+  setLoading(true);
+  try {
+    const fd = new FormData();
+    fd.append('nom', name);
+    fd.append('courant', denomination);
+    fd.append('type', type === 'en_langue' ? 'chorale' : type === 'jeunesse' ? 'chorale' : 'groupe_priere');
+    fd.append('langue', 'mixte');
+    fd.append('categorie', type === 'jeunesse' ? 'jeunesse' : 'adulte');
+    fd.append('description', description);
+    fd.append('ville', city);
 
-      const body = { name, type, denomination, church, city, description, logo_url: logoUrl };
-      const r = await fetch(`${API_BASE}/chorales`, {
-        method: 'POST', headers: getHeaders(), body: JSON.stringify(body)
-      });
-      if (!r.ok) throw new Error('Erreur serveur');
-      const saved = await r.json();
-      onCreated({ ...saved, id: String(saved.id) });
-      onClose();
-    } catch {
-      alert('Erreur lors de la création. Réessayez.');
-    } finally {
-      setLoading(false);
+    // Convertir base64 en blob pour FormData
+    const base64Data = logoBase64.split(',')[1];
+    const byteCharacters = atob(base64Data);
+    const byteArray = new Uint8Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteArray[i] = byteCharacters.charCodeAt(i);
     }
-  };
+    const blob = new Blob([byteArray], { type: 'image/jpeg' });
+    fd.append('logo', blob, 'logo.jpg');
+
+    const user = JSON.parse(localStorage.getItem('spirittalk_user') || '{}');
+    const token = user?.token || user?.access_token || '';
+
+    const r = await fetch(`${API_BASE}/chorales`, {
+      method: 'POST',
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      body: fd,
+    });
+    if (!r.ok) {
+      const err = await r.json();
+      throw new Error(JSON.stringify(err));
+    }
+    const saved = await r.json();
+    onCreated({ ...saved, id: String(saved.id), name: saved.nom });
+    onClose();
+  } catch (err: any) {
+    console.error(err);
+    alert('Erreur lors de la création. Réessayez.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
