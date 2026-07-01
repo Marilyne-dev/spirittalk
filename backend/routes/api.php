@@ -145,3 +145,16 @@ Route::get('/quran', function (\Illuminate\Http\Request $request) {
 Route::post('/upload-audio', [App\Http\Controllers\UploadController::class, 'audio']);
 
 
+
+// ── Ajoute ces lignes dans routes/api.php dans le groupe auth:sanctum ────
+
+// Chorales
+Route::get('/chorales', [App\Http\Controllers\ChoraleController::class, 'index']);
+Route::post('/chorales', [App\Http\Controllers\ChoraleController::class, 'store']);
+Route::get('/chorales/{id}', [App\Http\Controllers\ChoraleController::class, 'show']);
+
+// Chansons d'une chorale
+Route::get('/chorales/{choraleId}/chansons', [App\Http\Controllers\ChansonController::class, 'index']);
+Route::post('/chansons', [App\Http\Controllers\ChansonController::class, 'store']);
+Route::post('/chansons/{id}/download', [App\Http\Controllers\ChansonController::class, 'download']);
+Route::post('/chansons/{id}/ecouter', [App\Http\Controllers\ChansonController::class, 'ecouter']);
