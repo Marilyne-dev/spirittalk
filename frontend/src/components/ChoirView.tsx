@@ -44,15 +44,10 @@ const API_BASE = ((import.meta as any).env?.VITE_API_URL || 'https://marilyne.al
 
 // PAR :
 const getHeaders = () => {
-  try {
-    const user = JSON.parse(localStorage.getItem('spirittalk_user') || '{}');
-    const token = user?.token || user?.access_token || user?.api_token || '';
-    const h: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
-    if (token) h['Authorization'] = `Bearer ${token}`;
-    return h;
-  } catch {
-    return { 'Content-Type': 'application/json', Accept: 'application/json' };
-  }
+  const token = localStorage.getItem('spirittalk_token') || '';
+  const h: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
+  if (token) h['Authorization'] = `Bearer ${token}`;
+  return h;
 };
 
 // Chorales catholiques pré-enregistrées (seeds)
@@ -370,7 +365,6 @@ const handleSubmit = async (e: React.FormEvent) => {
     fd.append('description', description);
     fd.append('ville', city);
 
-    // Convertir base64 en blob pour FormData
     const base64Data = logoBase64.split(',')[1];
     const byteCharacters = atob(base64Data);
     const byteArray = new Uint8Array(byteCharacters.length);
@@ -379,10 +373,7 @@ const handleSubmit = async (e: React.FormEvent) => {
     }
     const blob = new Blob([byteArray], { type: 'image/jpeg' });
     fd.append('logo', blob, 'logo.jpg');
-
-    const user = JSON.parse(localStorage.getItem('spirittalk_user') || '{}');
-    const token = user?.token || user?.access_token || '';
-
+    const token = localStorage.getItem('spirittalk_token') || '';
     const r = await fetch(`${API_BASE}/chorales`, {
       method: 'POST',
       headers: token ? { 'Authorization': `Bearer ${token}` } : {},
